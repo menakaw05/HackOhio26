@@ -168,8 +168,11 @@ export class Avatar {
 
   // Play synthesized audio with its blend shape frames.
   //   boost:  { gains: { jawOpen: 1.4 }, start: 0.20, end: 0.45 }  (seconds)
-  //   holdAt: seconds into the clip to freeze the face (e.g. peak of /p/)
-  //   holdMs: how long to freeze
+  //   holdAt: seconds into the clip whose pose to show first (e.g. lips sealed
+  //           for /p/). The face eases into that pose and holds it silently
+  //           for holdMs, then the clip plays straight through. (Pausing the
+  //           audio mid-sound instead cut "pah" in two.)
+  //   holdMs: how long to show the pose
   play({ audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' }, { boost = null, holdAt = null, holdMs = 500 } = {}) {
     this.stop();
     this.boost = boost;
@@ -177,14 +180,18 @@ export class Avatar {
     // Azure also sends a few extra viseme events at offset 0 after the real
     // ones; keep the timed ones, in order.
     visemes = visemes.filter((v) => v.time > 0).sort((a, b) => a.time - b.time);
-    this.anim = { el, frames, visemes, fps, holdAt, holdMs, held: false, holding: false };
+    const now = performance.now();
+    this.anim = { el, frames, visemes, fps, holdAt, previewStart: now, previewUntil: holdAt != null ? now + holdMs : 0 };
     return new Promise((resolve, reject) => {
       el.onended = () => {
         this.anim = null;
         this.relax();
         resolve();
       };
-      el.play().catch(reject); // browsers need a user gesture before the first play
+      // browsers need a user gesture before the first play
+      const start = () => this.anim?.el === el && el.play().catch(reject);
+      if (holdAt != null) setTimeout(start, holdMs);
+      else start();
     });
   }
 
@@ -204,17 +211,14 @@ export class Avatar {
 
   tick() {
     const a = this.anim;
-    if (a && !a.holding) {
+    const now = performance.now();
+    if (a && now < a.previewUntil) {
+      // Showing the held pose before speaking, eased in over 150 ms.
+      const i = Math.min(a.frames.length - 1, Math.round(a.holdAt * a.fps));
+      const k = Math.min(1, (now - a.previewStart) / 150);
+      if (a.frames[i]) this.applyFrame(a.frames[i].map((v) => v * k), a.holdAt, a.visemes);
+    } else if (a) {
       const t = a.el.currentTime;
-      if (a.holdAt != null && !a.held && t >= a.holdAt) {
-        a.held = true;
-        a.holding = true;
-        a.el.pause();
-        setTimeout(() => {
-          a.holding = false;
-          if (this.anim === a) a.el.play();
-        }, a.holdMs);
-      }
       const i = Math.min(a.frames.length - 1, Math.floor(t * a.fps));
       if (i >= 0 && a.frames[i]) this.applyFrame(a.frames[i], t, a.visemes);
     }
