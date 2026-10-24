@@ -22,12 +22,17 @@ const escapeXml = (s) =>
 // text: a word or chunk ("pop", "po", "pah").
 // voice: en-US-AnaNeural is Azure's child voice; check it supports blend shapes.
 // rate: slower speech for demonstrations; the blend shapes slow down with it.
-export function synthesize(text, config, { voice = 'en-US-AnaNeural', rate = '-30%' } = {}) {
+// ipa: say exactly these sounds instead of reading the text, e.g. "pʌ" for a
+//   single /p/ ("puh" as text comes out "pooh", "sss" as "ess ess ess").
+export function synthesize(text, config, { voice = 'en-US-AnaNeural', rate = '-30%', ipa = null } = {}) {
+  const body = ipa
+    ? `<phoneme alphabet="ipa" ph="${escapeXml(ipa)}">${escapeXml(text)}</phoneme>`
+    : escapeXml(text);
   const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"
     xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="en-US">
     <voice name="${voice}">
       <mstts:viseme type="FacialExpression"/>
-      <prosody rate="${rate}">${escapeXml(text)}</prosody>
+      <prosody rate="${rate}">${body}</prosody>
     </voice>
   </speak>`;
 
