@@ -134,6 +134,11 @@ export class Avatar {
     this.camera.lookAt(this.lookAt);
   }
 
+  getWeight(name) {
+    const t = this.targets.get(norm(name));
+    return t ? t[0].mesh.morphTargetInfluences[t[0].index] : 0;
+  }
+
   setWeight(name, value) {
     const t = this.targets.get(norm(name));
     if (!t) return;

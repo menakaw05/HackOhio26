@@ -2,6 +2,7 @@ import { AvaturnSDK } from '@avaturn/sdk';
 import { Avatar, BILABIAL, peakTime } from './avatar.js';
 import { getSpeechConfig, synthesize } from './azureTts.js';
 import { FaceTracker } from './faceTracker.js';
+import { MirrorCheck } from './mirror.js';
 
 // Your Avaturn project subdomain from developer.avaturn.me ("demo" works for testing).
 const AVATURN_SUBDOMAIN = 'voice';
@@ -90,17 +91,28 @@ $('xray').onchange = (e) => {
   $('tongue').style.display = e.target.checked ? 'block' : 'none';
 };
 
-// 4. Camera mirror with face tracking. Logs the kid's jawOpen so you can
-// compare it with the avatar's target value for the same sound.
+// 4. Camera mirror with face tracking, compared live with the coach
+// (see mirror.js). Copy me: the coach says the word, then the kid copies it.
+const mirror = new MirrorCheck($('mirror'), avatar);
 $('startCam').onclick = async () => {
   try {
     await tracker.init($('cam'));
-    let n = 0;
-    tracker.start((f) => {
-      if (++n % 30 === 0) log(`kid jawOpen ${f.blend.jawOpen?.toFixed(2)}  mouthFunnel ${f.blend.mouthFunnel?.toFixed(2)}`);
-    });
+    tracker.start((f) => mirror.kidFrame(f));
   } catch (e) {
     log(`Camera error: ${e.message}`);
+  }
+};
+$('copyMe').onclick = async () => {
+  if (!tracker.running) {
+    log('Start the camera first.');
+    return;
+  }
+  try {
+    const word = $('word').value;
+    const clip = await synthesize(word, await getSpeechConfig());
+    await mirror.copyMe(word, () => avatar.play(clip));
+  } catch (e) {
+    log(`Copy me error: ${e.message}`);
   }
 };
 
