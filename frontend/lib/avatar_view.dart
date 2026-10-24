@@ -11,6 +11,13 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+/// avatar-web dev server (`npm run dev:lan`) on the laptop, same Wi-Fi:
+///   flutter run --dart-define=AVATAR_URL=http://192.168.x.x:5173
+const String avatarBaseUrl = String.fromEnvironment(
+  'AVATAR_URL',
+  defaultValue: 'http://localhost:5173',
+);
+
 class AvatarView extends StatefulWidget {
   const AvatarView({super.key, required this.url, this.onMessage});
 

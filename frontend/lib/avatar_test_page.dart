@@ -7,13 +7,6 @@ import 'package:flutter/material.dart';
 
 import 'avatar_view.dart';
 
-// avatar-web dev server (`npm run dev:lan`) on the laptop, same Wi-Fi:
-//   flutter run --dart-define=AVATAR_URL=http://192.168.x.x:5173
-const String _avatarUrl = String.fromEnvironment(
-  'AVATAR_URL',
-  defaultValue: 'http://localhost:5173',
-);
-
 const _presets = ['krupa', 'menaka'];
 const _bilabial = 21; // Azure viseme id for p, b, m
 
@@ -128,7 +121,7 @@ class _AvatarTestPageState extends State<AvatarTestPage> {
           IgnorePointer(
             child: AvatarView(
               key: _avatarKey,
-              url: '$_avatarUrl/?embed=1&avatar=$_preset',
+              url: '$avatarBaseUrl/?embed=1&avatar=$_preset',
               onMessage: _onAvatarMessage,
             ),
           ),
