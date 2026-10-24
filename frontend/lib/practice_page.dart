@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'avatar_coach.dart';
 import 'avatar_test_page.dart';
+import 'avatar_view.dart';
 import 'face_camera.dart';
 import 'phoneme_classifier.dart';
 import 'phoneme_feedback.dart';
@@ -11,7 +14,8 @@ import 'speech_controller.dart';
 import 'speech_models.dart';
 import 'tts_service.dart';
 
-enum PracticeMode { word, phoneme }
+// word = stage 1, phoneme = stage 2 (sound practice), demo = stage 3 (avatar demonstrates)
+enum PracticeMode { word, phoneme, demo }
 
 class PracticePage extends StatefulWidget {
   const PracticePage({super.key});
@@ -38,6 +42,13 @@ class _PracticePageState extends State<PracticePage> {
   bool _cameraUnavailable = false;
   String? _lastFaceJson;
   int? _lastFaceFrameCount;
+
+  // Stage 3: the avatar demonstrates, the child retries until the sound passes.
+  GlobalKey<AvatarViewState> _avatarKey = GlobalKey();
+  bool _avatarReady = false;
+  bool _demoPending = false;
+  int _demoTry = 0;
+  double _demoAccuracy = 0;
 
   bool _isRecording = false;
   bool _isAssessing = false;
@@ -195,7 +206,7 @@ class _PracticePageState extends State<PracticePage> {
     }
 
     final faceFeedback = await _faceModelFeedback(target.phoneme);
-    _afterPhonemeDecision(faceFeedback ?? azureFeedbackFor(target));
+    _startDemo(faceFeedback ?? azureFeedbackFor(target));
   }
 
   /// Runs the ONNX face model on the last sound attempt, or returns null if there's no model
@@ -215,7 +226,7 @@ class _PracticePageState extends State<PracticePage> {
     }
   }
 
-  /// After the one phoneme attempt, retry the word if attempts remain, otherwise move on.
+  /// After the sound practice, retry the word if attempts remain, otherwise move on.
   void _afterPhonemeDecision(String feedback) {
     final canRetryWord = _wordAttempt <= maxWordAttempts;
     final next = canRetryWord
@@ -231,6 +242,127 @@ class _PracticePageState extends State<PracticePage> {
     _tts.speak(_feedback!);
   }
 
+  // -------------------------
+  // DEMO attempt (stage 3): the avatar shows the sound, the child retries
+  // until Azure scores the trouble sound as passing
+  // -------------------------
+  void _startDemo(String cue) {
+    final target = _targetPhoneme!;
+    final tip = isTongueSound(target.phoneme)
+        ? 'This sound is made with your tongue. Watch the coach closely.'
+        : 'Watch the coach.';
+    setState(() {
+      _mode = PracticeMode.demo;
+      _demoTry = 0;
+      _demoAccuracy = target.accuracyScore;
+      _avatarKey = GlobalKey();
+      _avatarReady = false;
+      _demoPending = false;
+      _feedback = cue.isEmpty ? tip : '$cue $tip';
+    });
+    _speakThenDemonstrate(_feedback!);
+  }
+
+  /// Speaks the cue, then the avatar demonstrates once its page has loaded.
+  Future<void> _speakThenDemonstrate(String cue) async {
+    await _tts.speak(cue);
+    if (!mounted || _mode != PracticeMode.demo) return;
+    if (_avatarReady) {
+      _demonstrate();
+    } else {
+      _demoPending = true;
+    }
+  }
+
+  void _onAvatarMessage(String raw) {
+    final m = jsonDecode(raw) as Map<String, dynamic>;
+    switch (m['event']) {
+      case 'ready':
+        _avatarReady = true;
+        if (_demoPending) {
+          _demoPending = false;
+          _demonstrate();
+        }
+      case 'error':
+        setState(() => _error = 'Avatar: ${m['message']}');
+    }
+  }
+
+  /// The avatar says the word, holding on the trouble sound's mouth shape and
+  /// exaggerating its movement less as the child gets closer.
+  void _demonstrate() {
+    final target = _targetPhoneme;
+    if (target == null) return;
+    final viseme = visemeFor(target.phoneme);
+    final gains = boostFor(target.phoneme, boostGain(_demoAccuracy));
+    _avatarKey.currentState?.say(_currentWord, opts: {
+      if (viseme != null) 'holdViseme': viseme,
+      'holdMs': 900,
+      if (gains.isNotEmpty) 'boost': {'gains': gains, 'start': 0, 'end': 30},
+    });
+  }
+
+  Future<void> _toggleDemoAttempt() async {
+    if (_isRecording) {
+      final file = await _speechController.onStopClicked();
+      final faceJson =
+          _faceCamera.isStreaming ? await _faceCamera.stopFaceStream() : null;
+      setState(() {
+        _isRecording = false;
+        _lastRecording = file;
+        _lastFaceJson = faceJson;
+      });
+      if (file != null) await _assessDemo(file);
+    } else {
+      await _tts.stop();
+      if (!mounted) return;
+      final started = await _speechController.onStartClicked(context);
+      if (started) await _faceCamera.startFaceStream();
+      setState(() {
+        _isRecording = started;
+        if (started) {
+          _feedback = null;
+          _error = null;
+        }
+      });
+    }
+  }
+
+  /// Scores the retry on the trouble sound only (Azure's score for that
+  /// phoneme inside the word). Passing goes back to the whole word, unaided.
+  Future<void> _assessDemo(File file) async {
+    final target = _targetPhoneme;
+    if (target == null) return;
+    setState(() => _isAssessing = true);
+    try {
+      final result = await _speechController.assess(
+          file, _currentWord, GradingLevel.phoneme);
+      final attempt = findPhoneme(result, target.phoneme);
+      setState(() {
+        _result = result;
+        _demoTry += 1;
+      });
+      if (attempt != null && attempt.accuracyScore >= passingAccuracy) {
+        _afterPhonemeDecision('You got the /${target.phoneme}/ sound!');
+        return;
+      }
+
+      if (attempt != null) _demoAccuracy = attempt.accuracyScore;
+      final faceFeedback = await _faceModelFeedback(target.phoneme);
+      final cue = faceFeedback ??
+          (attempt == null
+              ? "I couldn't hear the /${target.phoneme}/ sound."
+              : voicingCue(attempt) ?? azureFeedbackFor(attempt));
+      setState(() => _feedback = '$cue Watch again, then try.');
+      _speakThenDemonstrate(_feedback!);
+    } catch (e) {
+      print('assess error: $e');
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isAssessing = false);
+    }
+  }
+
   Future<void> _playLastRecording() async {
     if (_lastRecording == null) return;
     await _player.setFilePath(_lastRecording!.path);
@@ -240,6 +372,8 @@ class _PracticePageState extends State<PracticePage> {
   @override
   Widget build(BuildContext context) {
     final isPhoneme = _mode == PracticeMode.phoneme;
+    final isDemo = _mode == PracticeMode.demo;
+    final isSound = isPhoneme || isDemo;
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -275,41 +409,61 @@ class _PracticePageState extends State<PracticePage> {
             children: [
               Flexible(
                 child: Text(
-                  isPhoneme ? '/${_targetPhoneme!.phoneme}/' : _currentWord,
+                  isSound ? '/${_targetPhoneme!.phoneme}/' : _currentWord,
                   style: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
               IconButton(
-                tooltip: 'Hear it',
-                onPressed: _isRecording ? null : (isPhoneme ? _sayPhoneme : _sayWord),
+                tooltip: isDemo ? 'Watch again' : 'Hear it',
+                onPressed: _isRecording
+                    ? null
+                    : (isDemo ? _demonstrate : (isPhoneme ? _sayPhoneme : _sayWord)),
                 icon: const Icon(Icons.volume_up),
               ),
             ],
           ),
           Center(
             child: Text(
-              isPhoneme
-                  ? '(sound practice)'
-                  : 'Attempt $_wordAttempt of $maxWordAttempts',
+              isDemo
+                  ? 'Watch the coach, then say "$_currentWord". Try ${_demoTry + 1}'
+                  : isPhoneme
+                      ? '(sound practice)'
+                      : 'Attempt $_wordAttempt of $maxWordAttempts',
               style: TextStyle(
-                  color: isPhoneme ? Colors.redAccent : textTheme.bodySmall?.color),
+                  color: isSound ? Colors.redAccent : textTheme.bodySmall?.color),
             ),
           ),
           if (isPhoneme) ...[
             const SizedBox(height: 16),
             _buildCameraPreview(),
           ],
+          if (isDemo) ...[
+            const SizedBox(height: 16),
+            _buildDemoView(),
+          ],
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _isAssessing
                 ? null
-                : (isPhoneme ? _togglePhonemeAttempt : _toggleWordRecording),
+                : (isDemo
+                    ? _toggleDemoAttempt
+                    : (isPhoneme ? _togglePhonemeAttempt : _toggleWordRecording)),
             icon: Icon(_isRecording ? Icons.stop : Icons.mic),
             label: Text(_isRecording
                 ? 'Stop'
-                : (isPhoneme ? 'Start sound attempt' : 'Record')),
+                : (isDemo
+                    ? 'Try "$_currentWord"'
+                    : (isPhoneme ? 'Start sound attempt' : 'Record'))),
           ),
           const SizedBox(height: 8),
+          if (isDemo) ...[
+            OutlinedButton.icon(
+              onPressed: _isRecording || _isAssessing ? null : _demonstrate,
+              icon: const Icon(Icons.replay),
+              label: const Text('Watch again'),
+            ),
+            const SizedBox(height: 8),
+          ],
           OutlinedButton.icon(
             onPressed: _lastRecording == null || _isRecording
                 ? null
@@ -334,6 +488,47 @@ class _PracticePageState extends State<PracticePage> {
               ),
             ),
           if (_result != null) _ResultView(result: _result!),
+        ],
+      ),
+    );
+  }
+
+  /// Stage 3: the coach (avatar) and the child (camera) side by side.
+  Widget _buildDemoView() {
+    final controller = _faceCamera.controller;
+    return SizedBox(
+      height: 260,
+      child: Row(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                // the avatar fills this box; touches go to the buttons
+                child: IgnorePointer(
+                  child: AvatarView(
+                    key: _avatarKey,
+                    url: '$avatarBaseUrl/?embed=1&frame=0,0,1,1',
+                    onMessage: _onAvatarMessage,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Center(
+              child: _cameraUnavailable ||
+                      controller == null ||
+                      !_faceCamera.isInitialized
+                  ? const Text('No camera available on this device.')
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CameraPreview(controller),
+                    ),
+            ),
+          ),
         ],
       ),
     );
