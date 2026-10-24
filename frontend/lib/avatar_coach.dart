@@ -93,7 +93,50 @@ const Map<String, SoundPrompt> _soundPrompts = {
   'ɝ': (text: 'her', ipa: 'ɝ'), 'ɚ': (text: 'her', ipa: 'ɝ'),
 };
 
-SoundPrompt soundPromptFor(String ipa) => _soundPrompts[ipa] ?? (text: ipa, ipa: ipa);
+// Letters for a consonant or vowel inside a practice syllable ("p" + "ah").
+const Map<String, String> _consonantLetters = {
+  'p': 'p', 'b': 'b', 't': 't', 'd': 'd', 'k': 'k', 'g': 'g', 'ɡ': 'g',
+  'f': 'f', 'v': 'v', 's': 's', 'z': 'z', 'm': 'm', 'n': 'n', 'l': 'l',
+  'ɹ': 'r', 'w': 'w', 'j': 'y', 'h': 'h', 'ʃ': 'sh', 'ʒ': 'zh',
+  'tʃ': 'ch', 'dʒ': 'j', 'θ': 'th', 'ð': 'th', 'ŋ': 'ng',
+};
+const Map<String, String> _vowelLetters = {
+  'ɑ': 'ah', 'æ': 'a', 'ɛ': 'eh', 'e': 'ay', 'eɪ': 'ay', 'ɪ': 'i', 'i': 'ee',
+  'u': 'oo', 'ʊ': 'oo', 'ʌ': 'uh', 'ə': 'uh', 'oʊ': 'oh', 'o': 'oh', 'ɔ': 'aw',
+  'aɪ': 'eye', 'aʊ': 'ow', 'ɔɪ': 'oy', 'ɝ': 'er', 'ɚ': 'er',
+};
+
+bool isVowel(String ipa) => _vowelLetters.containsKey(ipa);
+
+/// How to practice one sound. A consonant goes into a syllable with the vowel
+/// next to it in the word, so it's said the way it is in the word: the /p/
+/// at the start of "pop" becomes "pah" (consonant + vowel), the /p/ at the
+/// end "ahp" (vowel + consonant). With no vowel beside it, or for a vowel,
+/// the sound is practiced on its own ("puh", "sss", "oo").
+SoundPrompt soundPromptFor(String ipa, {String? before, String? after}) {
+  final c = _consonantLetters[ipa];
+  if (c != null) {
+    if (after != null && isVowel(after)) {
+      return (text: '$c${_vowelLetters[after]}', ipa: '$ipa$after');
+    }
+    if (before != null && isVowel(before)) {
+      return (text: '${_vowelLetters[before]}$c', ipa: '$before$ipa');
+    }
+  }
+  return _soundPrompts[ipa] ?? (text: ipa, ipa: ipa);
+}
+
+/// The sounds just before and after [target] in the word Azure scored
+/// ([target] must come from [result]).
+({String? before, String? after}) neighbors(PAResult result, PhonemeAssessment target) {
+  for (final word in result.words) {
+    final i = word.phonemes.indexOf(target);
+    if (i < 0) continue;
+    String? at(int j) => j >= 0 && j < word.phonemes.length ? word.phonemes[j].phoneme : null;
+    return (before: at(i - 1), after: at(i + 1));
+  }
+  return (before: null, after: null);
+}
 
 /// Single sounds are hard for speech scoring, so the bar is lower than for
 /// words (ice bridges uses the same 50).

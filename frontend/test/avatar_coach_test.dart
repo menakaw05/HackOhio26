@@ -76,6 +76,24 @@ void main() {
     expect(soundPromptFor('?'), (text: '?', ipa: '?'));
   });
 
+  test('consonants are practiced in a syllable with the word\'s own vowel', () {
+    // "pop" = p ɑ p
+    expect(soundPromptFor('p', after: 'ɑ'), (text: 'pah', ipa: 'pɑ'));
+    expect(soundPromptFor('p', before: 'ɑ'), (text: 'ahp', ipa: 'ɑp'));
+    expect(soundPromptFor('ɹ', before: 's', after: 'æ'), (text: 'ra', ipa: 'ɹæ'));
+    // no vowel beside it: the sound on its own
+    expect(soundPromptFor('s', after: 't'), (text: 'sss', ipa: 'sss'));
+    // vowels are practiced on their own
+    expect(soundPromptFor('u', before: 'b', after: 't'), (text: 'too', ipa: 'u'));
+  });
+
+  test('finds the sounds around the trouble sound', () {
+    final p1 = _p('p', 40), a = _p('ɑ', 90), p2 = _p('p', 80);
+    final r = result([p1, a, p2]);
+    expect(neighbors(r, p1), (before: null, after: 'ɑ'));
+    expect(neighbors(r, p2), (before: 'ɑ', after: null));
+  });
+
   test('scores only the target sound, ignoring the added vowel', () {
     // "puh" said with a good /p/ and a mumbled "uh"
     expect(soundScore(result([_p('p', 85), _p('ʌ', 20)]), 'p'), 85);

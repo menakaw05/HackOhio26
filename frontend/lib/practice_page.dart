@@ -43,6 +43,11 @@ class _PracticePageState extends State<PracticePage> {
   String? _lastFaceJson;
   int? _lastFaceFrameCount;
 
+  // What the child practices in stages 2-3, e.g. "pah" for the first p in "pop".
+  SoundPrompt? _soundPrompt;
+  SoundPrompt get _prompt =>
+      _soundPrompt ?? soundPromptFor(_targetPhoneme?.phoneme ?? '');
+
   // Stage 3: the avatar demonstrates, the child retries until the sound passes.
   GlobalKey<AvatarViewState> _avatarKey = GlobalKey();
   bool _avatarReady = false;
@@ -82,6 +87,7 @@ class _PracticePageState extends State<PracticePage> {
       _mode = PracticeMode.word;
       _wordAttempt = 1;
       _targetPhoneme = null;
+      _soundPrompt = null;
       _result = null;
       _feedback = null;
       _error = null;
@@ -94,7 +100,7 @@ class _PracticePageState extends State<PracticePage> {
 
   void _sayPhoneme() {
     final target = _targetPhoneme;
-    if (target != null) _tts.speak('Say /${target.phoneme}/.');
+    if (target != null) _tts.speak('Say /${_prompt.ipa}/.');
   }
 
   // -------------------------
@@ -159,12 +165,16 @@ class _PracticePageState extends State<PracticePage> {
       return;
     }
 
+    // practice the sound where it sits in the word: "pah" for the first p in "pop"
+    final around = neighbors(result, worst);
+    final prompt = soundPromptFor(worst.phoneme, before: around.before, after: around.after);
     setState(() {
       _mode = PracticeMode.phoneme;
       _targetPhoneme = worst;
-      _feedback = "Let's practice the /${worst.phoneme}/ sound.";
+      _soundPrompt = prompt;
+      _feedback = "Let's practice the /${worst.phoneme}/ sound. Say \"${prompt.text}\".";
     });
-    _tts.speak("Let's practice the /${worst.phoneme}/ sound. Say /${worst.phoneme}/.");
+    _tts.speak("Let's practice the /${worst.phoneme}/ sound. Say /${prompt.ipa}/.");
     _initCamera();
   }
 
@@ -216,7 +226,7 @@ class _PracticePageState extends State<PracticePage> {
     setState(() => _isAssessing = true);
     try {
       final result = await _speechController.assess(
-          file, soundPromptFor(target.phoneme).text, GradingLevel.phoneme);
+          file, _prompt.text, GradingLevel.phoneme);
       final score = soundScore(result, target.phoneme);
       final lipTip = await _faceModelFeedback(target.phoneme);
       setState(() {
@@ -278,6 +288,7 @@ class _PracticePageState extends State<PracticePage> {
     setState(() {
       _mode = PracticeMode.word;
       _targetPhoneme = null;
+      _soundPrompt = null;
       _feedback = feedback.isEmpty ? next : '$feedback $next';
       if (!canRetryWord) _wordAttempt = 1;
     });
@@ -335,7 +346,7 @@ class _PracticePageState extends State<PracticePage> {
   void _demonstrate() {
     final target = _targetPhoneme;
     if (target == null) return;
-    final prompt = soundPromptFor(target.phoneme);
+    final prompt = _prompt;
     final viseme = visemeFor(target.phoneme);
     final gains = boostFor(target.phoneme, boostGain(_demoAccuracy));
     _avatarKey.currentState?.say(prompt.text, opts: {
@@ -408,9 +419,9 @@ class _PracticePageState extends State<PracticePage> {
           Center(
             child: Text(
               isDemo
-                  ? 'Watch the coach, then copy the sound. Try ${_demoTry + 1}'
+                  ? 'Watch the coach, then say "${_prompt.text}". Try ${_demoTry + 1}'
                   : isPhoneme
-                      ? '(sound practice)'
+                      ? '(sound practice) Say "${_prompt.text}"'
                       : 'Attempt $_wordAttempt of $maxWordAttempts',
               style: TextStyle(
                   color: isSound ? Colors.redAccent : textTheme.bodySmall?.color),
