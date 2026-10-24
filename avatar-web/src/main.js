@@ -34,13 +34,31 @@ if (params.has('frame')) {
 // Flutter can't know the timing before the speech is synthesized.
 const notify = (m) => window.AvatarBridge?.postMessage(JSON.stringify(m));
 window.avatar = avatar;
+
+// Synthesized clips by text + voice options. A repeated demonstration starts
+// right away, and window.prepare(text, tts) fetches one ahead of time (e.g.
+// while the app is still speaking a tip).
+const clips = new Map();
+const clipFor = (text, tts) => {
+  const key = JSON.stringify([text, tts ?? null]);
+  if (!clips.has(key)) {
+    const pending = getSpeechConfig().then((config) => synthesize(text, config, tts));
+    pending.catch(() => clips.delete(key));
+    clips.set(key, pending);
+  }
+  return clips.get(key);
+};
+window.prepare = (text, tts) => clipFor(text, tts).then(() => true, () => false);
+
 window.say = async (text, opts = {}) => {
   try {
-    const config = await getSpeechConfig();
-    const clip = await synthesize(text, config, opts.tts);
+    const clip = await clipFor(text, opts.tts);
     if (opts.holdViseme != null) {
-      const v = clip.visemes.find((x) => x.id === opts.holdViseme && x.time > 0);
-      if (v) opts = { ...opts, holdAt: v.time + 0.08 };
+      // Hold just inside the sound; if it's the first sound, show it first.
+      const sounds = clip.visemes.filter((x) => x.time > 0 && x.id !== 0);
+      const v = sounds.find((x) => x.id === opts.holdViseme);
+      // (early in the sound, before the jaw starts moving toward the next one)
+      if (v) opts = { ...opts, holdAt: v.time + 0.03, holdBefore: v === sounds[0] };
     }
     notify({ event: 'started', text, duration: clip.frames.length / clip.fps });
     await avatar.play(clip, opts);

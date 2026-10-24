@@ -168,20 +168,27 @@ export class Avatar {
 
   // Play synthesized audio with its blend shape frames.
   //   boost:  { gains: { jawOpen: 1.4 }, start: 0.20, end: 0.45 }  (seconds)
-  //   holdAt: seconds into the clip whose pose to show first (e.g. lips sealed
-  //           for /p/). The face eases into that pose and holds it silently
-  //           for holdMs, then the clip plays straight through. (Pausing the
-  //           audio mid-sound instead cut "pah" in two.)
-  //   holdMs: how long to show the pose
-  play({ audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' }, { boost = null, holdAt = null, holdMs = 500 } = {}) {
+  //   holdAt: seconds into the clip whose pose to hold (e.g. lips sealed for /p/)
+  //   holdMs: how long to hold it
+  //   holdBefore: the held sound starts the clip (the /p/ of "pah"). The face
+  //     eases into its pose, holds it silently, and keeps it until the audio
+  //     gets there, so the lips close once and open into the vowel. Otherwise
+  //     (the /p/ of "ahp") the audio pauses on the pose when it gets there,
+  //     which is the silent closure, so the sound isn't cut in two.
+  play({ audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' },
+    { boost = null, holdAt = null, holdMs = 500, holdBefore = false } = {}) {
     this.stop();
     this.boost = boost;
     const el = new Audio(URL.createObjectURL(new Blob([audio], { type: mime })));
     // Azure also sends a few extra viseme events at offset 0 after the real
     // ones; keep the timed ones, in order.
     visemes = visemes.filter((v) => v.time > 0).sort((a, b) => a.time - b.time);
+    const before = holdAt != null && holdBefore;
     const now = performance.now();
-    this.anim = { el, frames, visemes, fps, holdAt, previewStart: now, previewUntil: holdAt != null ? now + holdMs : 0 };
+    this.anim = {
+      el, frames, visemes, fps, holdAt, holdMs, holdBefore: before,
+      held: false, holding: false, previewStart: now, previewUntil: before ? now + holdMs : 0,
+    };
     return new Promise((resolve, reject) => {
       el.onended = () => {
         this.anim = null;
@@ -190,7 +197,7 @@ export class Avatar {
       };
       // browsers need a user gesture before the first play
       const start = () => this.anim?.el === el && el.play().catch(reject);
-      if (holdAt != null) setTimeout(start, holdMs);
+      if (before) setTimeout(start, holdMs);
       else start();
     });
   }
@@ -217,10 +224,21 @@ export class Avatar {
       const i = Math.min(a.frames.length - 1, Math.round(a.holdAt * a.fps));
       const k = Math.min(1, (now - a.previewStart) / 150);
       if (a.frames[i]) this.applyFrame(a.frames[i].map((v) => v * k), a.holdAt, a.visemes);
-    } else if (a) {
+    } else if (a && !a.holding) {
       const t = a.el.currentTime;
-      const i = Math.min(a.frames.length - 1, Math.floor(t * a.fps));
-      if (i >= 0 && a.frames[i]) this.applyFrame(a.frames[i], t, a.visemes);
+      if (a.holdAt != null && !a.holdBefore && !a.held && t >= a.holdAt) {
+        a.held = true;
+        a.holding = true;
+        a.el.pause();
+        setTimeout(() => {
+          a.holding = false;
+          if (this.anim === a) a.el.play();
+        }, a.holdMs);
+      }
+      // A held first sound keeps its pose until the audio reaches it.
+      const ft = a.holdBefore && t < a.holdAt ? a.holdAt : t;
+      const i = Math.min(a.frames.length - 1, Math.floor(ft * a.fps));
+      if (i >= 0 && a.frames[i]) this.applyFrame(a.frames[i], ft, a.visemes);
     }
     if (this.root) {
       // Turn to profile in X-ray mode so the tongue overlay lines up.
