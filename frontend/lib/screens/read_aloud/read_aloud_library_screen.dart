@@ -23,8 +23,8 @@ class ReadAloudLibraryScreen extends StatelessWidget {
         if (passages.isEmpty)
           const EmptyState(icon: Icons.menu_book_rounded, title: 'No stories yet')
         else
-          for (final p in passages) ...[
-            _PassageCard(passage: p),
+          for (final (i, p) in passages.indexed) ...[
+            FadeSlideIn(index: i, child: _PassageCard(passage: p)),
             const SizedBox(height: AppSpace.m),
           ],
       ],

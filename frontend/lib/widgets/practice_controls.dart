@@ -1,35 +1,104 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'feedback_banner.dart';
+import 'motion.dart';
 
-/// Big round mic button. The listening animation is added in the polish pass.
-class MicButton extends StatelessWidget {
+/// Big round mic button with a gentle pulse while listening.
+class MicButton extends StatefulWidget {
   const MicButton({super.key, required this.listening, required this.onPressed});
 
   final bool listening;
   final VoidCallback? onPressed;
 
   @override
+  State<MicButton> createState() => _MicButtonState();
+}
+
+class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
+
+  void _sync() {
+    if (widget.listening && !reduceMotion(context)) {
+      if (!_pulse.isAnimating) _pulse.repeat();
+    } else {
+      _pulse
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(MicButton old) {
+    super.didUpdateWidget(old);
+    if (old.listening != widget.listening) _sync();
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final onPressed = widget.onPressed;
+    final color = widget.listening ? AppColors.lotus : AppColors.lake;
     return Semantics(
       button: true,
-      label: listening ? 'Stop listening' : 'Start talking',
+      label: widget.listening ? 'Stop listening' : 'Start talking',
       child: SizedBox.square(
-        dimension: AppSize.micButton,
-        child: Material(
-          shape: const CircleBorder(),
-          color: listening ? AppColors.lotus : AppColors.lake,
-          elevation: 4,
-          shadowColor: AppColors.shadow,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: Icon(
-              listening ? Icons.stop_rounded : Icons.mic_rounded,
-              color: Colors.white,
-              size: 40,
+        dimension: AppSize.micButton * 1.5,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // expanding, fading ring behind the button
+            AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, _) => _pulse.value == 0
+                  ? const SizedBox.shrink()
+                  : Container(
+                      width: AppSize.micButton * (1 + 0.5 * _pulse.value),
+                      height: AppSize.micButton * (1 + 0.5 * _pulse.value),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color.withValues(alpha: 0.35 * (1 - _pulse.value)),
+                      ),
+                    ),
             ),
-          ),
+            PressScale(
+              enabled: onPressed != null,
+              child: SizedBox.square(
+                dimension: AppSize.micButton,
+                child: Material(
+                  shape: const CircleBorder(),
+                  color: onPressed == null ? AppColors.inkFaint : color,
+                  elevation: 4,
+                  shadowColor: AppColors.shadow,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onPressed == null
+                        ? null
+                        : () {
+                            AppHaptics.tap();
+                            onPressed();
+                          },
+                    child: Icon(
+                      widget.listening ? Icons.stop_rounded : Icons.mic_rounded,
+                      color: Colors.white,
+                      size: 40,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

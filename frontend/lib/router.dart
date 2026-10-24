@@ -19,6 +19,7 @@ import 'screens/settings/settings_screen.dart';
 import 'screens/shell/app_shell.dart';
 import 'screens/testing/testing_screen.dart';
 import 'screens/welcome/welcome_screen.dart';
+import 'widgets/widgets.dart';
 import 'screens/word_practice/word_practice_screen.dart';
 
 abstract final class Routes {
@@ -63,6 +64,7 @@ GoRouter buildRouter(AppState state) {
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: _startRoute,
+    errorBuilder: (context, s) => const MissingPage(what: 'page'),
     refreshListenable: state,
     // nobody picked yet: everything leads to Welcome
     redirect: (context, s) {

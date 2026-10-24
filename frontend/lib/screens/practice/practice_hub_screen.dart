@@ -64,7 +64,10 @@ class PracticeHubScreen extends StatelessWidget {
           return Wrap(
             spacing: AppSpace.m,
             runSpacing: AppSpace.m,
-            children: [for (final c in cards) SizedBox(width: width, child: c)],
+            children: [
+              for (var i = 0; i < cards.length; i++)
+                SizedBox(width: width, child: FadeSlideIn(index: i, child: cards[i])),
+            ],
           );
         }),
         if (next != null) ...[

@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import 'motion.dart';
+
+VoidCallback? _withHaptic(VoidCallback? onPressed) => onPressed == null
+    ? null
+    : () {
+        AppHaptics.tap();
+        onPressed();
+      };
 
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -20,11 +27,14 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = color == null ? null : FilledButton.styleFrom(backgroundColor: color);
+    final tap = _withHaptic(onPressed);
     final button = icon == null
-        ? FilledButton(style: style, onPressed: onPressed, child: Text(label))
-        : FilledButton.icon(
-            style: style, onPressed: onPressed, icon: Icon(icon), label: Text(label));
-    return expand ? SizedBox(width: double.infinity, child: button) : button;
+        ? FilledButton(style: style, onPressed: tap, child: Text(label))
+        : FilledButton.icon(style: style, onPressed: tap, icon: Icon(icon), label: Text(label));
+    return PressScale(
+      enabled: onPressed != null,
+      child: expand ? SizedBox(width: double.infinity, child: button) : button,
+    );
   }
 }
 
@@ -44,9 +54,13 @@ class SecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tap = _withHaptic(onPressed);
     final button = icon == null
-        ? OutlinedButton(onPressed: onPressed, child: Text(label))
-        : OutlinedButton.icon(onPressed: onPressed, icon: Icon(icon), label: Text(label));
-    return expand ? SizedBox(width: double.infinity, child: button) : button;
+        ? OutlinedButton(onPressed: tap, child: Text(label))
+        : OutlinedButton.icon(onPressed: tap, icon: Icon(icon), label: Text(label));
+    return PressScale(
+      enabled: onPressed != null,
+      child: expand ? SizedBox(width: double.infinity, child: button) : button,
+    );
   }
 }

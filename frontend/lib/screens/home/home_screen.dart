@@ -81,7 +81,8 @@ class HomeScreen extends StatelessWidget {
                   clipBehavior: Clip.none,
                   itemCount: queue.length,
                   separatorBuilder: (_, _) => const SizedBox(width: AppSpace.m),
-                  itemBuilder: (context, i) => _QueueWordCard(word: queue.items[i]),
+                  itemBuilder: (context, i) =>
+                      FadeSlideIn(index: i, child: _QueueWordCard(word: queue.items[i])),
                 ),
               ),
             const SectionHeader(title: 'This week'),

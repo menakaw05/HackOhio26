@@ -34,13 +34,16 @@ class WelcomeScreen extends StatelessWidget {
               Text("Who's practicing today?",
                   style: AppText.title, textAlign: TextAlign.center),
               const SizedBox(height: AppSpace.l),
-              for (final learner in state.learners) ...[
-                _LearnerCard(
-                  learner: learner,
-                  onTap: () {
-                    state.selectLearner(learner.id);
-                    context.go(Routes.home);
-                  },
+              for (final (i, learner) in state.learners.indexed) ...[
+                FadeSlideIn(
+                  index: i,
+                  child: _LearnerCard(
+                    learner: learner,
+                    onTap: () {
+                      state.selectLearner(learner.id);
+                      context.go(Routes.home);
+                    },
+                  ),
                 ),
                 const SizedBox(height: AppSpace.m),
               ],

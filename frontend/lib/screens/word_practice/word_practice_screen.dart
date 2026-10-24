@@ -33,18 +33,21 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   bool _listening = false;
   bool _slowMotion = false;
   String? _focusPhoneme;
+  int _celebrations = 0;
 
   @override
   void initState() {
     super.initState();
     final queue = context.read<PracticeQueue>();
     final text = widget.word ?? queue.peek()?.text ?? 'boot';
-    _word = queue.items.where((w) => w.text == text).firstOrNull ??
+    _word =
+        queue.items.where((w) => w.text == text).firstOrNull ??
         DemoSeed.word(text, widget.source, DateTime.now());
   }
 
-  void _comingSoon(String what) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text('$what is coming soon.')));
+  void _comingSoon(String what) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text('$what is coming soon.')));
 
   void _toggleMic() {
     if (!_listening) {
@@ -57,7 +60,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
       _listening = false;
       _attempts.add(result);
       _step = _Step.feedback;
+      if (result.kind == FeedbackKind.success) _celebrations++;
     });
+    if (result.kind == FeedbackKind.success) AppHaptics.success();
   }
 
   void _tryAgain() => setState(() => _step = _Step.tryIt);
@@ -69,9 +74,14 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     if (next == null) {
       context.pop();
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("That's everything in your practice list!")));
+        const SnackBar(
+          content: Text("That's everything in your practice list!"),
+        ),
+      );
     } else {
-      context.pushReplacement(Routes.wordPractice(next.text, source: next.source));
+      context.pushReplacement(
+        Routes.wordPractice(next.text, source: next.source),
+      );
     }
   }
 
@@ -89,7 +99,10 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
           ),
         ),
         const Spacer(),
-        AttemptDots(total: _maxAttempts, results: [for (final a in _attempts) a.kind]),
+        AttemptDots(
+          total: _maxAttempts,
+          results: [for (final a in _attempts) a.kind],
+        ),
       ],
     );
 
@@ -104,7 +117,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
           results: _step == _Step.feedback && _attempts.isNotEmpty
               ? _attempts.last.phonemeResults
               : null,
-          onTap: (p) => setState(() => _focusPhoneme = _focusPhoneme == p ? null : p),
+          onTap: (p) =>
+              setState(() => _focusPhoneme = _focusPhoneme == p ? null : p),
         ),
         const SizedBox(height: AppSpace.l),
         StepperBar(
@@ -130,36 +144,52 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
         ),
         title: const Text('Word Practice'),
       ),
-      body: SafeArea(
-        top: false,
-        child: wide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Expanded(
-                    flex: 55,
-                    child: Padding(padding: EdgeInsets.all(AppSpace.xl), child: _AvatarStage()),
-                  ),
-                  Expanded(
-                    flex: 45,
-                    child: ListView(
-                      padding: const EdgeInsets.all(AppSpace.xl),
-                      children: [header, const SizedBox(height: AppSpace.l), coach],
+      body: Stack(
+        children: [
+          SafeArea(
+            top: false,
+            child: wide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Expanded(
+                        flex: 55,
+                        child: Padding(
+                          padding: EdgeInsets.all(AppSpace.xl),
+                          child: _AvatarStage(),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 45,
+                        child: ListView(
+                          padding: const EdgeInsets.all(AppSpace.xl),
+                          children: [
+                            header,
+                            const SizedBox(height: AppSpace.l),
+                            coach,
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpace.page,
+                      AppSpace.s,
+                      AppSpace.page,
+                      AppSpace.xxl,
                     ),
+                    children: [
+                      header,
+                      const SizedBox(height: AppSpace.m),
+                      const SizedBox(height: 220, child: _AvatarStage()),
+                      const SizedBox(height: AppSpace.l),
+                      coach,
+                    ],
                   ),
-                ],
-              )
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpace.page, AppSpace.s, AppSpace.page, AppSpace.xxl),
-                children: [
-                  header,
-                  const SizedBox(height: AppSpace.m),
-                  const SizedBox(height: 220, child: _AvatarStage()),
-                  const SizedBox(height: AppSpace.l),
-                  coach,
-                ],
-              ),
+          ),
+          Positioned.fill(child: CelebrationOverlay(playCount: _celebrations)),
+        ],
       ),
     );
   }
@@ -201,7 +231,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
             const SizedBox(height: AppSpace.s),
             Row(
               children: [
-                Flexible(child: Text('Tongue guidance', style: AppText.bodyStrong)),
+                Flexible(
+                  child: Text('Tongue guidance', style: AppText.bodyStrong),
+                ),
                 const SizedBox(width: AppSpace.s),
                 const TagBadge(label: 'Guidance'),
               ],
@@ -234,7 +266,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
               height: 150,
             ),
             const SizedBox(height: AppSpace.l),
-            Center(child: MicButton(listening: _listening, onPressed: _toggleMic)),
+            Center(
+              child: MicButton(listening: _listening, onPressed: _toggleMic),
+            ),
           ],
         );
       case _Step.feedback:
@@ -252,15 +286,24 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
             const SizedBox(height: AppSpace.l),
             if (last.kind != FeedbackKind.success && !outOfTries) ...[
               PrimaryButton(
-                  label: 'Try again', icon: Icons.replay_rounded, expand: true, onPressed: _tryAgain),
+                label: 'Try again',
+                icon: Icons.replay_rounded,
+                expand: true,
+                onPressed: _tryAgain,
+              ),
               const SizedBox(height: AppSpace.s),
-              SecondaryButton(label: 'Next word', expand: true, onPressed: _nextWord),
+              SecondaryButton(
+                label: 'Next word',
+                expand: true,
+                onPressed: _nextWord,
+              ),
             ] else
               PrimaryButton(
-                  label: 'Next word',
-                  icon: Icons.arrow_forward_rounded,
-                  expand: true,
-                  onPressed: _nextWord),
+                label: 'Next word',
+                icon: Icons.arrow_forward_rounded,
+                expand: true,
+                onPressed: _nextWord,
+              ),
           ],
         );
     }
@@ -304,8 +347,11 @@ class _SoundRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (phonemes.isEmpty) {
-      return Text('Sounds for this word are coming soon.',
-          style: AppText.caption, textAlign: TextAlign.center);
+      return Text(
+        'Sounds for this word are coming soon.',
+        style: AppText.caption,
+        textAlign: TextAlign.center,
+      );
     }
     return Wrap(
       alignment: WrapAlignment.center,
@@ -315,7 +361,9 @@ class _SoundRow extends StatelessWidget {
         for (var i = 0; i < phonemes.length; i++)
           SoundChip(
             phoneme: phonemes[i],
-            kind: results != null && i < results!.length ? results![i].kind : null,
+            kind: results != null && i < results!.length
+                ? results![i].kind
+                : null,
             selected: focus == phonemes[i],
             onTap: () => onTap(phonemes[i]),
           ),

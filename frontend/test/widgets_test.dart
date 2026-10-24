@@ -34,6 +34,8 @@ void main() {
             MicButton(listening: false, onPressed: () {}),
             const StepperBar(steps: ['Hear', 'Watch', 'Try', 'Feedback'], current: 1),
             const AttemptDots(total: 3, results: [FeedbackKind.almost]),
+            const SkeletonBox(width: 120),
+            const ErrorState(),
           ],
         ),
       ),
@@ -41,5 +43,53 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Coming soon'), findsOneWidget);
     expect(find.text('Almost!'), findsOneWidget);
+  });
+
+  testWidgets('mic pulses while listening and stops when done', (tester) async {
+    var listening = true;
+    late StateSetter setOuter;
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light(),
+      home: Scaffold(
+        body: StatefulBuilder(builder: (context, setState) {
+          setOuter = setState;
+          return MicButton(listening: listening, onPressed: () {});
+        }),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.hasRunningAnimations, isTrue);
+    setOuter(() => listening = false);
+    await tester.pumpAndSettle();
+    expect(tester.hasRunningAnimations, isFalse);
+  });
+
+  testWidgets('celebration plays once and clears', (tester) async {
+    var plays = 0;
+    late StateSetter setOuter;
+    await tester.pumpWidget(MaterialApp(
+      home: StatefulBuilder(builder: (context, setState) {
+        setOuter = setState;
+        return CelebrationOverlay(playCount: plays);
+      }),
+    ));
+    setOuter(() => plays++);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(CustomPaint), findsWidgets);
+    expect(tester.hasRunningAnimations, isTrue);
+    await tester.pumpAndSettle();
+    expect(tester.hasRunningAnimations, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('with Reduce Motion the mic does not pulse', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: MicButton(listening: true, onPressed: () {})),
+    ));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.hasRunningAnimations, isFalse);
   });
 }

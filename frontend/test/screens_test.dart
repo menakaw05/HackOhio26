@@ -11,6 +11,10 @@ import 'package:frontend/widgets/widgets.dart';
 /// Pumps the real app router at [location] as [learner], on an iPhone-sized screen.
 Future<GoRouter> pumpAt(WidgetTester tester, String location, {String learner = 'maya'}) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
+  // Reduce Motion on, so the repeating mic pulse doesn't keep pumpAndSettle waiting
+  tester.platformDispatcher.accessibilityFeaturesTestValue =
+      const FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
   final state = AppState()..selectLearner(learner);
   final router = buildRouter(state);
   await tester.pumpWidget(MultiProvider(
@@ -271,5 +275,16 @@ void main() {
     await tester.tap(find.text('Look & Say'));
     await tester.pumpAndSettle();
     expect(router.state.uri.path, Routes.lookAndSay);
+  });
+
+  testWidgets('unknown story and unknown route show a friendly error', (tester) async {
+    final router = await pumpAt(tester, Routes.reading('nope'));
+    expect(find.text("We couldn't find that story"), findsOneWidget);
+    router.go('/not-a-page');
+    await tester.pumpAndSettle();
+    expect(find.text("We couldn't find that page"), findsOneWidget);
+    await tester.tap(find.text('Go home'));
+    await tester.pumpAndSettle();
+    expect(find.text('Up next'), findsOneWidget);
   });
 }

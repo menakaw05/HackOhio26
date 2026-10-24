@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_card.dart';
+import 'motion.dart';
 
 class StatTile extends StatelessWidget {
   const StatTile({
@@ -55,12 +56,15 @@ class ProgressRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: size,
-      child: CustomPaint(
-        painter: _RingPainter(value.clamp(0, 1), stroke, color),
-        child: Center(child: child),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value.clamp(0, 1)),
+      duration: reduceMotion(context) ? Duration.zero : AppMotion.slow,
+      curve: Curves.easeOutCubic,
+      builder: (context, v, child) => SizedBox.square(
+        dimension: size,
+        child: CustomPaint(painter: _RingPainter(v, stroke, color), child: child),
       ),
+      child: Center(child: child),
     );
   }
 }
@@ -104,13 +108,18 @@ class ProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: AppRadius.pillRadius,
-      child: LinearProgressIndicator(
-        value: value.clamp(0, 1),
-        minHeight: height,
-        color: color,
-        backgroundColor: AppColors.lakeMist,
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value.clamp(0, 1)),
+      duration: reduceMotion(context) ? Duration.zero : AppMotion.slow,
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => ClipRRect(
+        borderRadius: AppRadius.pillRadius,
+        child: LinearProgressIndicator(
+          value: v,
+          minHeight: height,
+          color: color,
+          backgroundColor: AppColors.lakeMist,
+        ),
       ),
     );
   }

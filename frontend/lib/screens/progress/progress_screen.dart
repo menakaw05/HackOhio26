@@ -111,7 +111,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
           Wrap(
             spacing: AppSpace.m,
             runSpacing: AppSpace.m,
-            children: [for (final p in state.mastered) _MasteredBadge(phoneme: p)],
+            children: [
+              for (final (i, p) in state.mastered.indexed)
+                FadeSlideIn(index: i, child: _MasteredBadge(phoneme: p)),
+            ],
           ),
         ],
         if (state.activity.isNotEmpty) ...[

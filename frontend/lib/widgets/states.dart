@@ -136,3 +136,103 @@ class _DashedBorderPainter extends CustomPainter {
   @override
   bool shouldRepaint(_DashedBorderPainter oldDelegate) => false;
 }
+
+/// Friendly error card. Uses the calm focus blue, never red.
+class ErrorState extends StatelessWidget {
+  const ErrorState({
+    super.key,
+    this.title = 'Something went wrong',
+    this.message = "Let's try that again.",
+    this.actionLabel = 'Try again',
+    this.onAction,
+  });
+
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpace.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircleAvatar(
+            radius: 32,
+            backgroundColor: AppColors.focusSoft,
+            child: Icon(Icons.cloud_off_rounded, size: 32, color: AppColors.focus),
+          ),
+          const SizedBox(height: AppSpace.m),
+          Text(title, style: AppText.section, textAlign: TextAlign.center),
+          const SizedBox(height: AppSpace.xs),
+          Text(message, style: AppText.caption, textAlign: TextAlign.center),
+          if (onAction != null) ...[
+            const SizedBox(height: AppSpace.l),
+            OutlinedButton(onPressed: onAction, child: Text(actionLabel)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Shimmering placeholder shown while something loads.
+class SkeletonBox extends StatefulWidget {
+  const SkeletonBox({super.key, this.width, this.height = 16, this.radius = AppRadius.chip});
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  State<SkeletonBox> createState() => _SkeletonBoxState();
+}
+
+class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (still) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Loading',
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final x = _controller.value * 3 - 1;
+          return Container(
+            width: widget.width,
+            height: widget.height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(widget.radius),
+              gradient: LinearGradient(
+                begin: Alignment(x - 1, 0),
+                end: Alignment(x + 1, 0),
+                colors: const [AppColors.lakeMist, AppColors.surface, AppColors.lakeMist],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}

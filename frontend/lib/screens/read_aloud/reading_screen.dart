@@ -24,10 +24,8 @@ class _ReadingScreenState extends State<ReadingScreen> {
   // speech service later.
   static const _mockWordPace = Duration(milliseconds: 450);
 
-  late final Passage _passage = context
-      .read<AppState>()
-      .passages
-      .firstWhere((p) => p.id == widget.passageId);
+  late final Passage? _passage =
+      context.read<AppState>().passages.where((p) => p.id == widget.passageId).firstOrNull;
   Timer? _timer;
   int _current = -1;
 
@@ -47,7 +45,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
     setState(() {
       _current = 0;
       _timer = Timer.periodic(_mockWordPace, (_) {
-        if (_current >= _passage.words.length - 1) {
+        if (_current >= _passage!.words.length - 1) {
           _finish();
         } else {
           setState(() => _current++);
@@ -59,12 +57,14 @@ class _ReadingScreenState extends State<ReadingScreen> {
   void _finish() {
     _timer?.cancel();
     setState(() => _timer = null);
-    context.pushReplacement(Routes.readingResults(_passage.id));
+    context.pushReplacement(Routes.readingResults(_passage!.id));
   }
 
   @override
   Widget build(BuildContext context) {
-    final words = _passage.words;
+    final passage = _passage;
+    if (passage == null) return const MissingPage(what: 'story');
+    final words = passage.words;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -72,7 +72,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
           icon: const Icon(Icons.close_rounded),
           onPressed: () => context.pop(),
         ),
-        title: Text(_passage.title),
+        title: Text(passage.title),
       ),
       body: SafeArea(
         top: false,

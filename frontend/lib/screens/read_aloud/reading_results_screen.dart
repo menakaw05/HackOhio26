@@ -25,7 +25,8 @@ class _ReadingResultsScreenState extends State<ReadingResultsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppState>();
-    final passage = state.passages.firstWhere((p) => p.id == widget.passageId);
+    final passage = state.passages.where((p) => p.id == widget.passageId).firstOrNull;
+    if (passage == null) return const MissingPage(what: 'story');
     final words = passage.words;
     // SAMPLE DATA: results come from the seeded passage, not a real reading
     final flagged = passage.mockResults.keys.toList();
