@@ -51,6 +51,14 @@ class AppState extends ChangeNotifier {
     return queue.addAll(words.map((w) => DemoSeed.word(w.toLowerCase(), source, now)));
   }
 
+  /// Saves the latest Diagnostic as the current learner's sound profile.
+  void applyDiagnostic(List<SoundScore> profile) {
+    final current = _current;
+    if (current == null) return;
+    current.soundProfile = profile;
+    notifyListeners();
+  }
+
   /// Debug menu: restore the sample data and keep the current learner.
   void resetDemo() {
     final id = _current?.learner.id;

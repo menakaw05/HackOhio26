@@ -69,7 +69,7 @@ class DemoProfile {
 
   final Learner learner;
   final List<WordItem> queue;
-  final List<SoundScore> soundProfile;
+  List<SoundScore> soundProfile;
   final List<SoundTrend> trends;
   final List<String> mastered;
   final List<LessonNode> lessons;

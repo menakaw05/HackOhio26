@@ -142,4 +142,46 @@ void main() {
     expect(state.queue.length, before + 2);
     expect(find.text('Added to your practice'), findsOneWidget);
   });
+
+  testWidgets('diagnostic: 12 words, sound profile, add to practice', (tester) async {
+    final router = await pumpAt(tester, Routes.diagnostic, learner: 'sam');
+    expect(find.text('Word 1 of 12'), findsOneWidget);
+    for (var i = 0; i < 12; i++) {
+      await tester.tap(find.byType(MicButton));
+      await tester.pump();
+      await tester.tap(find.byType(MicButton));
+      await tester.pump();
+      expect(find.text('Got it!'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 900));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Your sound profile'), findsOneWidget);
+    expect(find.text('Needs practice'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    final state = Provider.of<AppState>(tester.element(find.byType(Scaffold).first), listen: false);
+    expect(state.queue.isEmpty, isTrue);
+    await tester.scrollUntilVisible(find.text('Add to my practice'), 300,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Add to my practice'));
+    await tester.pumpAndSettle();
+    expect(state.queue.isEmpty, isFalse);
+    expect(state.queue.items.first.source.name, 'diagnostic');
+
+    router.go(Routes.home);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Sounds to work on'), 300,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('No words yet'), findsNothing);
+  });
+
+  testWidgets('leaving the diagnostic asks first', (tester) async {
+    await pumpAt(tester, Routes.diagnostic);
+    await tester.tap(find.byTooltip('Exit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stop the Diagnostic?'), findsOneWidget);
+    await tester.tap(find.text('Keep going'));
+    await tester.pumpAndSettle();
+    expect(find.text('Word 1 of 12'), findsOneWidget);
+  });
 }
