@@ -31,6 +31,8 @@ class _PracticePageState extends State<PracticePage> {
   int _wordAttempt = 1;
   PhonemeAssessment? _targetPhoneme;
   bool _cameraUnavailable = false;
+  String? _lastFaceJson;
+  int? _lastFaceFrameCount;
 
   bool _isRecording = false;
   bool _isAssessing = false;
@@ -140,12 +142,20 @@ class _PracticePageState extends State<PracticePage> {
   // -------------------------
   Future<void> _togglePhonemeAttempt() async {
     if (_isRecording) {
-      setState(() => _isRecording = false);
+      final frameCount = _faceCamera.frameCount;
+      final faceJson = await _faceCamera.stopFaceStream();
+      setState(() {
+        _isRecording = false;
+        _lastFaceJson = faceJson;
+        _lastFaceFrameCount = frameCount;
+      });
       await _handlePhonemeEvaluation();
     } else {
+      await _faceCamera.startFaceStream();
       setState(() {
         _isRecording = true;
         _feedback = null;
+        _lastFaceFrameCount = null;
       });
     }
   }
@@ -242,6 +252,9 @@ class _PracticePageState extends State<PracticePage> {
           if (_error != null)
             Text(_error!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          if (_lastFaceFrameCount != null)
+            Text('Captured $_lastFaceFrameCount face frames on the last sound attempt.',
+                style: textTheme.bodySmall),
           if (_feedback != null)
             Card(
               color: Theme.of(context).colorScheme.primaryContainer,
