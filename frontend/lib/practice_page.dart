@@ -210,7 +210,8 @@ class _PracticePageState extends State<PracticePage> {
   }
 
   /// Runs the ONNX face model on the last sound attempt, or returns null if there's no model
-  /// for this phoneme or no usable face data.
+  /// for this phoneme, no usable face data, or the lips looked right (the camera only
+  /// explains a miss; then the tongue/voicing/Azure cue is used instead).
   Future<String?> _faceModelFeedback(String phoneme) async {
     final faceJson = _lastFaceJson;
     if (!PhonemeQualityModel.hasModelFor(phoneme) || faceJson == null) return null;
@@ -218,7 +219,8 @@ class _PracticePageState extends State<PracticePage> {
     try {
       await _model.loadModel(phoneme);
       final feedback = _model.getPhonemeFeedback(faceJson);
-      print("visual feedback for /$phoneme/: $feedback");
+      print("visual feedback for /$phoneme/: ${_model.lastLabel} $feedback");
+      if (_model.lastWasCorrect) return null;
       return feedback;
     } catch (e) {
       print('face model error: $e');
