@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'avatar_test_page.dart';
 import 'face_camera.dart';
 import 'phoneme_classifier.dart';
 import 'phoneme_feedback.dart';
@@ -242,7 +243,19 @@ class _PracticePageState extends State<PracticePage> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pronunciation')),
+      appBar: AppBar(
+        title: const Text('Pronunciation'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.face),
+            tooltip: 'Avatar test',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AvatarTestPage()),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>refLEXion avatar starter</title>
+    <style>
+      :root { --bg: #f6f5f1; --ink: #1d1d1b; --muted: #6b6a64; --card: #ffffff; --line: #dcdad2; --accent: #2f6fde; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #161615; --ink: #eceae4; --muted: #a09e96; --card: #222220; --line: #3a3936; --accent: #7aa7ff; }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+      main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+      .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 720px) { .stage { grid-template-columns: 1fr; } }
+      .panel { position: relative; aspect-ratio: 4 / 3; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+      .panel canvas, .panel video { width: 100%; height: 100%; display: block; object-fit: cover; }
+      video { transform: scaleX(-1); } /* mirror */
+      .label { position: absolute; top: 8px; left: 10px; font-size: 12px; color: var(--muted); }
+      #tongue { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
+      .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+      button, input, select, #saveGlb { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+      #saveGlb { text-decoration: none; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      #log { font: 12px/1.4 ui-monospace, monospace; color: var(--muted); white-space: pre-wrap; }
+      /* Embed mode for Flutter: avatar only, fills the WebView, see-through background. */
+      body.embed, body.embed main { background: transparent; padding: 0; max-width: none; }
+      body.embed .stage { display: block; }
+      body.embed .stage > .panel:first-child, body.embed .controls, body.embed #log { display: none; }
+      body.embed .panel { position: fixed; inset: 0; aspect-ratio: auto; border: 0; border-radius: 0; background: transparent; }
+      body.embed .label { display: none; }
+      #creator { position: fixed; inset: 5%; border-radius: 12px; overflow: hidden; display: none; z-index: 10; background: var(--card); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="stage">
+        <div class="panel">
+          <span class="label">You (mirror)</span>
+          <video id="cam" playsinline muted></video>
+        </div>
+        <div class="panel">
+          <span class="label">Coach</span>
+          <canvas id="avatar"></canvas>
+          <!-- 2D tongue cross-section for X-ray mode. Replace with your poses. -->
+          <svg id="tongue" viewBox="0 0 400 300" aria-hidden="true">
+            <path id="tonguePath" d="M120 220 Q200 170 280 205" fill="none" stroke="#d4537e" stroke-width="18" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <div class="controls">
+        <input id="word" value="pop" size="10" aria-label="Word or chunk" />
+        <button class="primary" id="say">Say it</button>
+        <label><input type="checkbox" id="boost" /> Exaggerate lips (mouthClose ×1.5)</label>
+        <label><input type="checkbox" id="xray" /> X-ray</label>
+        <button id="startCam">Start camera</button>
+        <button id="create">Create avatar</button>
+        <a id="saveGlb" download="avatar.glb" hidden>Save avatar.glb</a>
+      </div>
+      <div id="log"></div>
+    </main>
+
+    <!-- Avaturn's SDK puts its creator iframe in here. -->
+    <div id="creator"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
