@@ -47,6 +47,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app records your voice to assess pronunciation.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the front camera to check your mouth shape while you practice sounds.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app connects to the pronunciation server on your local network.</string>
 	<key>NSAppTransportSecurity</key>

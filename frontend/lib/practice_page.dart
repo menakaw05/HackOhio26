@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'face_camera.dart';
 import 'phoneme_feedback.dart';
 import 'speech_controller.dart';
 import 'speech_models.dart';
@@ -21,12 +23,14 @@ class _PracticePageState extends State<PracticePage> {
 
   final SpeechController _speechController = SpeechController();
   final AudioPlayer _player = AudioPlayer();
+  final FaceCamera _faceCamera = FaceCamera();
   final TextEditingController _referenceTextController =
       TextEditingController(text: 'boot');
 
   PracticeMode _mode = PracticeMode.word;
   int _wordAttempt = 1;
   PhonemeAssessment? _targetPhoneme;
+  bool _cameraUnavailable = false;
 
   bool _isRecording = false;
   bool _isAssessing = false;
@@ -41,6 +45,7 @@ class _PracticePageState extends State<PracticePage> {
   void dispose() {
     _speechController.dispose();
     _player.dispose();
+    _faceCamera.dispose();
     _referenceTextController.dispose();
     super.dispose();
   }
@@ -121,6 +126,13 @@ class _PracticePageState extends State<PracticePage> {
       _targetPhoneme = worst;
       _feedback = "Let's practice the /${worst.phoneme}/ sound.";
     });
+    _initCamera();
+  }
+
+  Future<void> _initCamera() async {
+    final ready = await _faceCamera.initialize();
+    if (!mounted) return;
+    setState(() => _cameraUnavailable = !ready);
   }
 
   // -------------------------
@@ -203,6 +215,10 @@ class _PracticePageState extends State<PracticePage> {
                   color: isPhoneme ? Colors.redAccent : textTheme.bodySmall?.color),
             ),
           ),
+          if (isPhoneme) ...[
+            const SizedBox(height: 16),
+            _buildCameraPreview(),
+          ],
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _isAssessing
@@ -236,6 +252,23 @@ class _PracticePageState extends State<PracticePage> {
             ),
           if (_result != null) _ResultView(result: _result!),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview() {
+    final controller = _faceCamera.controller;
+    return SizedBox(
+      height: 360,
+      child: Center(
+        child: _cameraUnavailable
+            ? const Text('No camera available on this device.')
+            : (controller == null || !_faceCamera.isInitialized)
+                ? const CircularProgressIndicator()
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CameraPreview(controller),
+                  ),
       ),
     );
   }
