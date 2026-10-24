@@ -175,10 +175,11 @@ class _PracticePageState extends State<PracticePage> {
   }
 
   // -------------------------
-  // PHONEME attempt
+  // SOUND attempt (stages 2 and 3): just the trouble sound, voice + camera
   // -------------------------
   Future<void> _togglePhonemeAttempt() async {
     if (_isRecording) {
+      final file = await _speechController.onStopClicked();
       final frameCount = _faceCamera.frameCount;
       final faceJson = await _faceCamera.stopFaceStream();
       setState(() {
@@ -186,27 +187,66 @@ class _PracticePageState extends State<PracticePage> {
         _lastFaceJson = faceJson;
         _lastFaceFrameCount = frameCount;
       });
-      await _handlePhonemeEvaluation();
+      if (file != null) await _assessSound(file);
     } else {
       await _tts.stop();
-      await _faceCamera.startFaceStream();
+      if (!mounted) return;
+      final started = await _speechController.onStartClicked(context);
+      if (started) await _faceCamera.startFaceStream();
       setState(() {
-        _isRecording = true;
-        _feedback = null;
-        _lastFaceFrameCount = null;
+        _isRecording = started;
+        if (started) {
+          _feedback = null;
+          _error = null;
+          _lastFaceFrameCount = null;
+        }
       });
     }
   }
 
-  Future<void> _handlePhonemeEvaluation() async {
+  /// Judges a single-sound attempt the way eLEXir's ice bridges game does:
+  /// Azure scores the recording against the sound's spelling ("puh"), using
+  /// only the target sound's score, and passes at 50. For sounds with a lip
+  /// model (/p/, /æ/, /u/) the lips must also look right, and the model's tip
+  /// explains a miss. A miss in stage 2 moves on to the avatar demo (stage 3);
+  /// in stage 3 the avatar demonstrates again, with no cap on tries.
+  Future<void> _assessSound(File file) async {
     final target = _targetPhoneme;
-    if (target == null) {
-      _afterPhonemeDecision('');
-      return;
-    }
+    if (target == null) return;
+    setState(() => _isAssessing = true);
+    try {
+      final result = await _speechController.assess(
+          file, soundPromptFor(target.phoneme).text, GradingLevel.phoneme);
+      final score = soundScore(result, target.phoneme);
+      final lipTip = await _faceModelFeedback(target.phoneme);
+      setState(() {
+        _result = result;
+        _demoAccuracy = score;
+        if (_mode == PracticeMode.demo) _demoTry += 1;
+      });
 
-    final faceFeedback = await _faceModelFeedback(target.phoneme);
-    _startDemo(faceFeedback ?? azureFeedbackFor(target));
+      if (score >= soundPassScore && lipTip == null) {
+        _afterPhonemeDecision('You got the /${target.phoneme}/ sound!');
+        return;
+      }
+
+      final attempt = bestPhoneme(result, target.phoneme);
+      final cue = lipTip ??
+          (attempt == null
+              ? "I couldn't hear the /${target.phoneme}/ sound."
+              : voicingCue(attempt) ?? azureFeedbackFor(attempt));
+      if (_mode == PracticeMode.phoneme) {
+        _startDemo(cue);
+      } else {
+        setState(() => _feedback = '$cue Watch again, then try.');
+        _speakThenDemonstrate(_feedback!);
+      }
+    } catch (e) {
+      print('assess error: $e');
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isAssessing = false);
+    }
   }
 
   /// Runs the ONNX face model on the last sound attempt, or returns null if there's no model
@@ -245,8 +285,8 @@ class _PracticePageState extends State<PracticePage> {
   }
 
   // -------------------------
-  // DEMO attempt (stage 3): the avatar shows the sound, the child retries
-  // until Azure scores the trouble sound as passing
+  // DEMO (stage 3): the avatar shows the sound, the child keeps practicing
+  // just that sound until it passes (judged by _assessSound)
   // -------------------------
   void _startDemo(String cue) {
     final target = _targetPhoneme!;
@@ -290,79 +330,20 @@ class _PracticePageState extends State<PracticePage> {
     }
   }
 
-  /// The avatar says the word, holding on the trouble sound's mouth shape and
-  /// exaggerating its movement less as the child gets closer.
+  /// The avatar says the sound on its own ("puh", "sss"), holding on its mouth
+  /// shape and exaggerating its movement less as the child gets closer.
   void _demonstrate() {
     final target = _targetPhoneme;
     if (target == null) return;
+    final prompt = soundPromptFor(target.phoneme);
     final viseme = visemeFor(target.phoneme);
     final gains = boostFor(target.phoneme, boostGain(_demoAccuracy));
-    _avatarKey.currentState?.say(_currentWord, opts: {
+    _avatarKey.currentState?.say(prompt.text, opts: {
+      'tts': {'ipa': prompt.ipa},
       if (viseme != null) 'holdViseme': viseme,
       'holdMs': 900,
       if (gains.isNotEmpty) 'boost': {'gains': gains, 'start': 0, 'end': 30},
     });
-  }
-
-  Future<void> _toggleDemoAttempt() async {
-    if (_isRecording) {
-      final file = await _speechController.onStopClicked();
-      final faceJson =
-          _faceCamera.isStreaming ? await _faceCamera.stopFaceStream() : null;
-      setState(() {
-        _isRecording = false;
-        _lastRecording = file;
-        _lastFaceJson = faceJson;
-      });
-      if (file != null) await _assessDemo(file);
-    } else {
-      await _tts.stop();
-      if (!mounted) return;
-      final started = await _speechController.onStartClicked(context);
-      if (started) await _faceCamera.startFaceStream();
-      setState(() {
-        _isRecording = started;
-        if (started) {
-          _feedback = null;
-          _error = null;
-        }
-      });
-    }
-  }
-
-  /// Scores the retry on the trouble sound only (Azure's score for that
-  /// phoneme inside the word). Passing goes back to the whole word, unaided.
-  Future<void> _assessDemo(File file) async {
-    final target = _targetPhoneme;
-    if (target == null) return;
-    setState(() => _isAssessing = true);
-    try {
-      final result = await _speechController.assess(
-          file, _currentWord, GradingLevel.phoneme);
-      final attempt = findPhoneme(result, target.phoneme);
-      setState(() {
-        _result = result;
-        _demoTry += 1;
-      });
-      if (attempt != null && attempt.accuracyScore >= passingAccuracy) {
-        _afterPhonemeDecision('You got the /${target.phoneme}/ sound!');
-        return;
-      }
-
-      if (attempt != null) _demoAccuracy = attempt.accuracyScore;
-      final faceFeedback = await _faceModelFeedback(target.phoneme);
-      final cue = faceFeedback ??
-          (attempt == null
-              ? "I couldn't hear the /${target.phoneme}/ sound."
-              : voicingCue(attempt) ?? azureFeedbackFor(attempt));
-      setState(() => _feedback = '$cue Watch again, then try.');
-      _speakThenDemonstrate(_feedback!);
-    } catch (e) {
-      print('assess error: $e');
-      setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _isAssessing = false);
-    }
   }
 
   Future<void> _playLastRecording() async {
@@ -427,7 +408,7 @@ class _PracticePageState extends State<PracticePage> {
           Center(
             child: Text(
               isDemo
-                  ? 'Watch the coach, then say "$_currentWord". Try ${_demoTry + 1}'
+                  ? 'Watch the coach, then copy the sound. Try ${_demoTry + 1}'
                   : isPhoneme
                       ? '(sound practice)'
                       : 'Attempt $_wordAttempt of $maxWordAttempts',
@@ -447,14 +428,12 @@ class _PracticePageState extends State<PracticePage> {
           FilledButton.icon(
             onPressed: _isAssessing
                 ? null
-                : (isDemo
-                    ? _toggleDemoAttempt
-                    : (isPhoneme ? _togglePhonemeAttempt : _toggleWordRecording)),
+                : (isSound ? _togglePhonemeAttempt : _toggleWordRecording),
             icon: Icon(_isRecording ? Icons.stop : Icons.mic),
             label: Text(_isRecording
                 ? 'Stop'
                 : (isDemo
-                    ? 'Try "$_currentWord"'
+                    ? 'Try the sound'
                     : (isPhoneme ? 'Start sound attempt' : 'Record'))),
           ),
           const SizedBox(height: 8),

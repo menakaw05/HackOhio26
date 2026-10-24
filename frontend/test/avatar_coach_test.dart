@@ -51,25 +51,38 @@ void main() {
     expect(voicingCue(_p('p', 40)), isNull);
   });
 
-  test('finds the lowest-scoring occurrence of the target sound', () {
-    final result = PAResult(
-      recognizedText: '',
-      accuracyScore: 0,
-      fluencyScore: 0,
-      completenessScore: 0,
-      prosodyScore: 0,
-      pronunciationScore: 0,
-      words: [
-        WordAssessment(
-          word: 'pop',
-          accuracyScore: 0,
-          errorType: 'None',
-          phonemes: [_p('p', 90), _p('ɑ', 70), _p('p', 40)],
-          timestamp: DateTime.now(),
-        ),
-      ],
-    );
-    expect(findPhoneme(result, 'p')!.accuracyScore, 40);
-    expect(findPhoneme(result, 'm'), isNull);
+  PAResult result(List<PhonemeAssessment> phonemes, {double accuracy = 0}) => PAResult(
+        recognizedText: '',
+        accuracyScore: accuracy,
+        fluencyScore: 0,
+        completenessScore: 0,
+        prosodyScore: 0,
+        pronunciationScore: 0,
+        words: [
+          WordAssessment(
+            word: 'puh',
+            accuracyScore: accuracy,
+            errorType: 'None',
+            phonemes: phonemes,
+            timestamp: DateTime.now(),
+          ),
+        ],
+      );
+
+  test('single sounds are said like a teacher would', () {
+    expect(soundPromptFor('p'), (text: 'puh', ipa: 'pʌ'));
+    expect(soundPromptFor('s'), (text: 'sss', ipa: 'sss'));
+    expect(soundPromptFor('u'), (text: 'too', ipa: 'u'));
+    expect(soundPromptFor('?'), (text: '?', ipa: '?'));
+  });
+
+  test('scores only the target sound, ignoring the added vowel', () {
+    // "puh" said with a good /p/ and a mumbled "uh"
+    expect(soundScore(result([_p('p', 85), _p('ʌ', 20)]), 'p'), 85);
+    // best occurrence: the child says the sound once
+    expect(soundScore(result([_p('s', 30), _p('s', 70)]), 's'), 70);
+    // Azure didn't line the sound up: fall back to overall accuracy
+    expect(soundScore(result([_p('t', 60)], accuracy: 42), 'p'), 42);
+    expect(bestPhoneme(result([_p('t', 60)]), 'p'), isNull);
   });
 }
