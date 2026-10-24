@@ -62,10 +62,18 @@ class AvatarViewState extends State<AvatarView> {
   }
 
   /// Make the avatar say a word or chunk. opts are passed to avatar.play():
-  /// boost {gains, start, end}, holdAt (s), holdMs, tts {voice, rate}.
+  /// boost {gains, start, end}, holdViseme, holdMs, tts {voice, rate, ipa}.
   Future<void> say(String text, {Map<String, dynamic>? opts}) {
     return controller.runJavaScript(
       'window.say(${jsonEncode(text)}, ${jsonEncode(opts ?? {})});',
+    );
+  }
+
+  /// Synthesize a clip ahead of time so a later say() with the same text and
+  /// tts options starts right away.
+  Future<void> prepare(String text, {Map<String, dynamic>? tts}) {
+    return controller.runJavaScript(
+      'window.prepare(${jsonEncode(text)}, ${jsonEncode(tts)});',
     );
   }
 

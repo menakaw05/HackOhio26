@@ -173,6 +173,10 @@ class _PracticePageState extends State<PracticePage> {
       _targetPhoneme = worst;
       _soundPrompt = prompt;
       _feedback = "Let's practice the /${worst.phoneme}/ sound. Say \"${prompt.text}\".";
+      // the coach starts loading now (hidden) so it's ready if stage 3 is needed
+      _avatarKey = GlobalKey();
+      _avatarReady = false;
+      _demoPending = false;
     });
     _tts.speak("Let's practice the /${worst.phoneme}/ sound. Say /${prompt.ipa}/.");
     _initCamera();
@@ -245,11 +249,19 @@ class _PracticePageState extends State<PracticePage> {
           (attempt == null
               ? "I couldn't hear the /${target.phoneme}/ sound."
               : voicingCue(attempt) ?? azureFeedbackFor(attempt));
+      // Only the short tip is spoken (the full one is on screen), so the coach
+      // starts sooner.
+      final heard = (attempt?.nBestPhonemes.isNotEmpty ?? false)
+          ? attempt!.nBestPhonemes.first.phoneme
+          : null;
+      final spoken = lipTip ??
+          (attempt == null ? null : voicingCue(attempt)) ??
+          (heard != null && heard != target.phoneme ? 'That sounded like /$heard/.' : null);
       if (_mode == PracticeMode.phoneme) {
-        _startDemo(cue);
+        _startDemo(cue, spoken: spoken);
       } else {
         setState(() => _feedback = '$cue Watch again, then try.');
-        _speakThenDemonstrate(_feedback!);
+        _speakThenDemonstrate(spoken ?? 'Watch again.');
       }
     } catch (e) {
       print('assess error: $e');
@@ -299,7 +311,7 @@ class _PracticePageState extends State<PracticePage> {
   // DEMO (stage 3): the avatar shows the sound, the child keeps practicing
   // just that sound until it passes (judged by _assessSound)
   // -------------------------
-  void _startDemo(String cue) {
+  void _startDemo(String cue, {String? spoken}) {
     final target = _targetPhoneme!;
     final tip = isTongueSound(target.phoneme)
         ? 'This sound is made with your tongue. Watch the coach closely.'
@@ -308,15 +320,12 @@ class _PracticePageState extends State<PracticePage> {
       _mode = PracticeMode.demo;
       _demoTry = 0;
       _demoAccuracy = target.accuracyScore;
-      _avatarKey = GlobalKey();
-      _avatarReady = false;
-      _demoPending = false;
       _feedback = cue.isEmpty ? tip : '$cue $tip';
     });
-    _speakThenDemonstrate(_feedback!);
+    _speakThenDemonstrate(spoken ?? tip);
   }
 
-  /// Speaks the cue, then the avatar demonstrates once its page has loaded.
+  /// Speaks a short cue, then the avatar demonstrates once its page has loaded.
   Future<void> _speakThenDemonstrate(String cue) async {
     await _tts.speak(cue);
     if (!mounted || _mode != PracticeMode.demo) return;
@@ -332,6 +341,10 @@ class _PracticePageState extends State<PracticePage> {
     switch (m['event']) {
       case 'ready':
         _avatarReady = true;
+        // synthesize the coach's syllable now, so the demo starts right away
+        if (_targetPhoneme != null) {
+          _avatarKey.currentState?.prepare(_prompt.text, tts: {'ipa': _prompt.ipa});
+        }
         if (_demoPending) {
           _demoPending = false;
           _demonstrate();
@@ -352,7 +365,7 @@ class _PracticePageState extends State<PracticePage> {
     _avatarKey.currentState?.say(prompt.text, opts: {
       'tts': {'ipa': prompt.ipa},
       if (viseme != null) 'holdViseme': viseme,
-      'holdMs': 900,
+      'holdMs': 600,
       if (gains.isNotEmpty) 'boost': {'gains': gains, 'start': 0, 'end': 30},
     });
   }
@@ -430,6 +443,8 @@ class _PracticePageState extends State<PracticePage> {
           if (isPhoneme) ...[
             const SizedBox(height: 16),
             _buildCameraPreview(),
+            // the coach loads here, out of sight, in case stage 3 is needed
+            SizedBox(height: 1, child: _coachView()),
           ],
           if (isDemo) ...[
             const SizedBox(height: 16),
@@ -485,6 +500,16 @@ class _PracticePageState extends State<PracticePage> {
     );
   }
 
+  /// The coach's page. The same key keeps it loaded when it moves from the
+  /// hidden stage 2 spot into view in stage 3. Touches go to the buttons.
+  Widget _coachView() => IgnorePointer(
+        child: AvatarView(
+          key: _avatarKey,
+          url: '$avatarBaseUrl/?embed=1&frame=0,0,1,1',
+          onMessage: _onAvatarMessage,
+        ),
+      );
+
   /// Stage 3: the coach (avatar) and the child (camera) side by side.
   Widget _buildDemoView() {
     final controller = _faceCamera.controller;
@@ -497,14 +522,7 @@ class _PracticePageState extends State<PracticePage> {
               borderRadius: BorderRadius.circular(12),
               child: ColoredBox(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                // the avatar fills this box; touches go to the buttons
-                child: IgnorePointer(
-                  child: AvatarView(
-                    key: _avatarKey,
-                    url: '$avatarBaseUrl/?embed=1&frame=0,0,1,1',
-                    onMessage: _onAvatarMessage,
-                  ),
-                ),
+                child: _coachView(),
               ),
             ),
           ),
