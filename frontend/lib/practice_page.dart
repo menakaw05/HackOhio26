@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'face_camera.dart';
+import 'phoneme_classifier.dart';
 import 'phoneme_feedback.dart';
 import 'speech_controller.dart';
 import 'speech_models.dart';
@@ -24,6 +25,7 @@ class _PracticePageState extends State<PracticePage> {
   final SpeechController _speechController = SpeechController();
   final AudioPlayer _player = AudioPlayer();
   final FaceCamera _faceCamera = FaceCamera();
+  final PhonemeQualityModel _model = PhonemeQualityModel();
   final TextEditingController _referenceTextController =
       TextEditingController(text: 'boot');
 
@@ -48,6 +50,7 @@ class _PracticePageState extends State<PracticePage> {
     _speechController.dispose();
     _player.dispose();
     _faceCamera.dispose();
+    _model.dispose();
     _referenceTextController.dispose();
     super.dispose();
   }
@@ -166,7 +169,26 @@ class _PracticePageState extends State<PracticePage> {
       _afterPhonemeDecision('');
       return;
     }
-    _afterPhonemeDecision(azureFeedbackFor(target));
+
+    final faceFeedback = await _faceModelFeedback(target.phoneme);
+    _afterPhonemeDecision(faceFeedback ?? azureFeedbackFor(target));
+  }
+
+  /// Runs the ONNX face model on the last sound attempt, or returns null if there's no model
+  /// for this phoneme or no usable face data.
+  Future<String?> _faceModelFeedback(String phoneme) async {
+    final faceJson = _lastFaceJson;
+    if (!PhonemeQualityModel.hasModelFor(phoneme) || faceJson == null) return null;
+
+    try {
+      await _model.loadModel(phoneme);
+      final feedback = _model.getPhonemeFeedback(faceJson);
+      print("visual feedback for /$phoneme/: $feedback");
+      return feedback;
+    } catch (e) {
+      print('face model error: $e');
+      return null;
+    }
   }
 
   /// After the one phoneme attempt, retry the word if attempts remain, otherwise move on.
