@@ -103,7 +103,10 @@ class TagBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.s, vertical: 2),
       decoration: BoxDecoration(color: background, borderRadius: AppRadius.pillRadius),
-      child: Text(label, style: AppText.caption.copyWith(color: color)),
+      child: Text(label,
+          style: AppText.caption.copyWith(color: color),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis),
     );
   }
 }

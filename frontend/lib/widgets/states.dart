@@ -73,6 +73,8 @@ class ComingSoon extends StatelessWidget {
 
   final String label;
   final IconData icon;
+
+  /// Minimum height; null fills the parent.
   final double? height;
   final String? detail;
 
@@ -82,12 +84,15 @@ class ComingSoon extends StatelessWidget {
       label: '$label, coming soon',
       child: CustomPaint(
         painter: _DashedBorderPainter(),
-        child: SizedBox(
-          height: height,
-          width: double.infinity,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: double.infinity,
+            minHeight: height ?? 0,
+          ),
           child: Padding(
             padding: const EdgeInsets.all(AppSpace.l),
             child: Column(
+              mainAxisSize: height == null ? MainAxisSize.max : MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(icon, color: AppColors.inkFaint, size: 32),
