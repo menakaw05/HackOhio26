@@ -115,3 +115,61 @@ class ProgressBar extends StatelessWidget {
     );
   }
 }
+
+/// Tiny trend line for a few points between 0 and 1.
+class Sparkline extends StatelessWidget {
+  const Sparkline({
+    super.key,
+    required this.values,
+    this.color = AppColors.lake,
+    this.width = 96,
+    this.height = 32,
+  });
+
+  final List<double> values;
+  final Color color;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: CustomPaint(painter: _SparklinePainter(values, color)),
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter(this.values, this.color);
+
+  final List<double> values;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    Offset point(int i) => Offset(
+          size.width * i / (values.length - 1),
+          size.height * (1 - values[i].clamp(0, 1)),
+        );
+    final path = Path()..moveTo(point(0).dx, point(0).dy);
+    for (var i = 1; i < values.length; i++) {
+      path.lineTo(point(i).dx, point(i).dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawCircle(point(values.length - 1), 4, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) => old.values != values || old.color != color;
+}

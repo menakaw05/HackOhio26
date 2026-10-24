@@ -201,4 +201,42 @@ void main() {
     expect(find.text('from Look & Say · today'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('progress: stats change with range, sections for the demo learner', (tester) async {
+    await pumpAt(tester, Routes.progress);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Getting better'), findsOneWidget);
+    String daysValue() => (tester
+            .widget<StatTile>(find.widgetWithText(StatTile, 'days practiced')))
+        .value;
+    final weekDays = daysValue();
+    await tester.tap(find.text('Month'));
+    await tester.pumpAndSettle();
+    expect(int.parse(daysValue()), greaterThan(int.parse(weekDays)));
+    await tester.scrollUntilVisible(find.text('Recent activity'), 300,
+        scrollable: find.byType(Scrollable).first);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('progress for a new learner is an empty state', (tester) async {
+    await pumpAt(tester, Routes.progress, learner: 'sam');
+    expect(find.text('No progress yet'), findsOneWidget);
+  });
+
+  testWidgets('SLP/parent can assign words to the queue', (tester) async {
+    await pumpAt(tester, Routes.grownups);
+    expect(tester.takeException(), isNull);
+    final state = Provider.of<AppState>(tester.element(find.byType(Scaffold).first), listen: false);
+    final before = state.queue.length;
+    await tester.scrollUntilVisible(find.byType(TextField), 300,
+        scrollable: find.byType(Scrollable).first);
+    await tester.enterText(find.byType(TextField), 'rain, giraffe, rain');
+    await tester.tap(find.text('Add to practice'));
+    await tester.pumpAndSettle();
+    // rain is already queued for Maya; only giraffe is new
+    expect(state.queue.length, before + 1);
+    expect(state.queue.items.last.text, 'giraffe');
+    expect(state.queue.items.last.source.name, 'assigned');
+    expect(find.text('rain, giraffe, rain'), findsNothing);
+  });
 }

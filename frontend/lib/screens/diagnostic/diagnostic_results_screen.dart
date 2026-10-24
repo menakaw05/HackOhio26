@@ -75,7 +75,7 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
                 AppCard(
                   child: Column(
                     children: [
-                      for (final s in groups[level]!) _SoundBar(score: s),
+                      for (final s in groups[level]!) SoundBar(score: s),
                     ],
                   ),
                 ),
@@ -99,40 +99,6 @@ class _DiagnosticResultsScreenState extends State<DiagnosticResultsScreen> {
             ),
             const SizedBox(height: AppSpace.s),
             SecondaryButton(label: 'Done', expand: true, onPressed: () => context.go(Routes.home)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SoundBar extends StatelessWidget {
-  const _SoundBar({required this.score});
-
-  final SoundScore score;
-
-  @override
-  Widget build(BuildContext context) {
-    final kind = score.level.kind;
-    return Semantics(
-      label: 'Sound ${score.phoneme}, as in ${score.exampleWord}: ${score.level.label}',
-      excludeSemantics: true,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpace.s),
-        child: Row(
-          children: [
-            SoundChip(phoneme: score.phoneme, kind: kind),
-            const SizedBox(width: AppSpace.m),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('as in "${score.exampleWord}"', style: AppText.caption),
-                  const SizedBox(height: AppSpace.xs),
-                  ProgressBar(value: score.score, color: kind.color),
-                ],
-              ),
-            ),
           ],
         ),
       ),

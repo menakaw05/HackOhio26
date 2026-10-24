@@ -5,5 +5,6 @@ export 'chips.dart';
 export 'feedback_banner.dart';
 export 'identity.dart';
 export 'practice_controls.dart';
+export 'sound_bar.dart';
 export 'states.dart';
 export 'stats.dart';
