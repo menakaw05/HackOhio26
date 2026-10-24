@@ -45,6 +45,8 @@ dependencies:
   webview_flutter: ^4.13.0
   webview_flutter_android: ^4.10.1
   webview_flutter_wkwebview: ^3.23.0
+  provider: ^6.1.5+1
+  go_router: ^17.0.0
 
 dev_dependencies:
   flutter_test:
