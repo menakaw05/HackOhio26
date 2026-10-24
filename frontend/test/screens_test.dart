@@ -184,4 +184,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Word 1 of 12'), findsOneWidget);
   });
+
+  testWidgets('look and say: pick a sample object, then say it', (tester) async {
+    final router = await pumpAt(tester, Routes.lookAndSay);
+    expect(find.text('Prototype'), findsOneWidget);
+    expect(find.text('Camera view'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'cat'));
+    await tester.pumpAndSettle();
+    expect(find.text('cat'), findsNWidgets(2)); // chip + detection label
+    await tester.scrollUntilVisible(find.text('Say "cat"'), 300,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Say "cat"'));
+    await tester.pumpAndSettle();
+    expect(router.state.uri.queryParameters['word'], 'cat');
+    expect(find.text('from Look & Say · today'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
