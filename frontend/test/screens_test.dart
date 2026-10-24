@@ -102,4 +102,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Sam!'), findsOneWidget);
   });
+
+  testWidgets('read aloud: library, reading highlight, results', (tester) async {
+    await pumpAt(tester, Routes.readAloud);
+    expect(find.text('The Lotus Pond'), findsOneWidget);
+    expect(find.text('Moon Boots'), findsOneWidget);
+
+    await tester.tap(find.text('The Lotus Pond'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(MicButton));
+    // MOCK pace is 450ms a word; let it run through the whole passage
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 450));
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('Nice reading!'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping a flagged reading word opens word practice for it', (tester) async {
+    final router = await pumpAt(tester, Routes.readingResults('lotus-pond'));
+    expect(find.text('words to practice'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Practice frog').first, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, '/word-practice');
+    expect(router.state.uri.queryParameters['word'], 'frog');
+    // frog is already in Maya's queue from yesterday's reading, so that entry is used
+    expect(find.text('from Reading · yesterday'), findsOneWidget);
+  });
+
+  testWidgets('practice these words adds flagged words to the queue', (tester) async {
+    await pumpAt(tester, Routes.readingResults('lotus-pond'));
+    final state = Provider.of<AppState>(tester.element(find.byType(Scaffold).first), listen: false);
+    final before = state.queue.length;
+    await tester.ensureVisible(find.text('Practice these words'));
+    await tester.tap(find.text('Practice these words'));
+    await tester.pumpAndSettle();
+    // frog is already queued for Maya; leaf and fish are new
+    expect(state.queue.length, before + 2);
+    expect(find.text('Added to your practice'), findsOneWidget);
+  });
 }
