@@ -8,9 +8,17 @@ import 'model/feature_extraction.dart';
 
 class PhonemeQualityModel {
   // Azure IPA phoneme -> model asset suffix. Only phonemes listed here have a face model.
-  static const Map<String, String> phonemeMap = {'u': 'O'};
+  // u as in "boot", p as in "pop", æ as in "apple".
+  static const Map<String, String> phonemeMap = {'u': 'O', 'p': 'P', 'æ': 'A'};
+
+  // The label each model gives a correct attempt.
+  static const Set<String> correctLabels = {'OO', 'GOOD', 'APPLE'};
 
   static bool hasModelFor(String phoneme) => phonemeMap.containsKey(phoneme);
+
+  // Majority label of the last scored attempt, e.g. "HALFCLOSED".
+  String? lastLabel;
+  bool get lastWasCorrect => correctLabels.contains(lastLabel);
 
   // OrtEnv.init() creates a new native env on every call, so only do it once per app
   static bool _envInitialized = false;
@@ -84,6 +92,7 @@ class PhonemeQualityModel {
 
     // 4. majority vote
     final finalLabel = _majorityVote(preds);
+    lastLabel = finalLabel;
 
     // 5. map to feedback
     return _labelToFeedback[finalLabel] as String? ??
