@@ -21,6 +21,8 @@ void main() {
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Testing'), 300,
+        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Testing'));
     await tester.pumpAndSettle();
     expect(find.text('Word drill'), findsOneWidget);

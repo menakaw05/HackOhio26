@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
+import 'debug_menu.dart';
 
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
@@ -62,7 +63,7 @@ class AppShell extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const MirrorULogo(size: 24),
+                  MirrorULogo(size: 24, onLongPress: () => showDebugMenu(context)),
                   const SizedBox(height: AppSpace.l),
                   if (learner != null)
                     Row(children: [

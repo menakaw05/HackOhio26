@@ -7,6 +7,7 @@ import '../../data/models.dart';
 import '../../router.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
+import '../shell/debug_menu.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -22,7 +23,7 @@ class WelcomeScreen extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpace.xl),
             children: [
               const SizedBox(height: AppSpace.xxl),
-              const Center(child: MirrorULogo(size: 40)),
+              Center(child: MirrorULogo(size: 40, onLongPress: () => showDebugMenu(context))),
               const SizedBox(height: AppSpace.xl),
               const ComingSoon(
                 label: 'Mascot illustration',

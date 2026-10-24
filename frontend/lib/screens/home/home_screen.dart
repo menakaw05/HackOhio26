@@ -8,6 +8,7 @@ import '../../data/practice_queue.dart';
 import '../../router.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
+import '../shell/debug_menu.dart';
 import '../shell/switch_learner.dart';
 import 'lesson_path.dart';
 
@@ -40,7 +41,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                const MirrorULogo(size: 22),
+                MirrorULogo(size: 22, onLongPress: () => showDebugMenu(context)),
                 const Spacer(),
                 Tooltip(
                   message: 'Switch learner',

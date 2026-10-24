@@ -239,4 +239,37 @@ void main() {
     expect(state.queue.items.last.source.name, 'assigned');
     expect(find.text('rain, giraffe, rain'), findsNothing);
   });
+
+  testWidgets('settings sections render', (tester) async {
+    await pumpAt(tester, Routes.settings);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Maya'), findsOneWidget);
+    expect(find.text('Preview'), findsWidgets);
+    await tester.scrollUntilVisible(find.text('About & credits'), 300,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('Testing'), findsOneWidget);
+  });
+
+  testWidgets('long-pressing the logo opens the debug menu, which can reset and jump',
+      (tester) async {
+    final router = await pumpAt(tester, Routes.home);
+    final state = Provider.of<AppState>(tester.element(find.byType(Scaffold).first), listen: false);
+    state.queue.next();
+    final shortened = state.queue.length;
+
+    await tester.longPress(find.byType(MirrorULogo));
+    await tester.pumpAndSettle();
+    expect(find.text('Debug menu'), findsOneWidget);
+    await tester.tap(find.text('Reset sample data'));
+    await tester.pumpAndSettle();
+    expect(state.queue.length, shortened + 1);
+
+    await tester.longPress(find.byType(MirrorULogo));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Look & Say'), 200,
+        scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.text('Look & Say'));
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, Routes.lookAndSay);
+  });
 }
