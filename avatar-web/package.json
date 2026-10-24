@@ -1,0 +1,21 @@
+{
+  "name": "reflexion-avatar-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:lan": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@avaturn/sdk": "1.1.4",
+    "@mediapipe/tasks-vision": "0.10.14",
+    "microsoft-cognitiveservices-speech-sdk": "1.41.0",
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "vite": "5.4.10"
+  }
+}

@@ -7,9 +7,11 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
 builder.Services.AddSingleton<PronunciationAssess>();
+builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
 app.MapGet("/", () => "Hello World!");
 app.MapControllers();
+app.MapSpeechToken();
 app.Run();
