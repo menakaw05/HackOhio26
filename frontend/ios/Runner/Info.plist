@@ -47,9 +47,15 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app records your voice to assess pronunciation.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera shows your face next to the practice avatar.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Loads the practice avatar from a computer on this Wi-Fi during testing.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 	</dict>
 </dict>

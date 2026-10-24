@@ -39,6 +39,10 @@ dependencies:
   path: ^1.9.1
   just_audio: ^0.10.6
   http: ^1.6.0
+  camera: ^0.11.2+1
+  webview_flutter: ^4.13.0
+  webview_flutter_android: ^4.10.1
+  webview_flutter_wkwebview: ^3.23.0
 
 dev_dependencies:
   flutter_test:

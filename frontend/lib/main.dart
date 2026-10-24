@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'avatar_test_page.dart';
 import 'speech_controller.dart';
 import 'speech_models.dart';
 
@@ -101,7 +102,19 @@ class _RecordPageState extends State<RecordPage> {
   Widget build(BuildContext context) {
     final busy = _isAssessing;
     return Scaffold(
-      appBar: AppBar(title: const Text('Pronunciation')),
+      appBar: AppBar(
+        title: const Text('Pronunciation'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.face),
+            tooltip: 'Avatar test',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AvatarTestPage()),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
