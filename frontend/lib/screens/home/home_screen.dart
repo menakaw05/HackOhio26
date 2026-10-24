@@ -8,6 +8,7 @@ import '../../data/practice_queue.dart';
 import '../../router.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
+import '../shell/switch_learner.dart';
 import 'lesson_path.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -23,7 +24,9 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final queue = context.watch<PracticeQueue>();
-    final learner = state.learner!;
+    final learner = state.learner;
+    // briefly null while switching learner, before the redirect to Welcome
+    if (learner == null) return const Scaffold();
 
     final weekAgo = DateUtils.dateOnly(DateTime.now()).subtract(const Duration(days: 6));
     final wordsThisWeek =
@@ -39,7 +42,17 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const MirrorULogo(size: 22),
                 const Spacer(),
-                LearnerAvatar(learner: learner, size: 40),
+                Tooltip(
+                  message: 'Switch learner',
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => confirmSwitchLearner(context),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpace.xs),
+                      child: LearnerAvatar(learner: learner, size: 40),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: AppSpace.xl),

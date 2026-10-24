@@ -89,4 +89,17 @@ void main() {
     expect(find.text('Great!'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('tapping the avatar on home switches learner', (tester) async {
+    await pumpAt(tester, Routes.home);
+    await tester.tap(find.byTooltip('Switch learner'));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch learner?'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+    expect(find.text("Who's practicing today?"), findsOneWidget);
+    await tester.tap(find.text('Sam'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Sam!'), findsOneWidget);
+  });
 }
