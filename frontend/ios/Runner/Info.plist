@@ -47,5 +47,10 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app records your voice to assess pronunciation.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
