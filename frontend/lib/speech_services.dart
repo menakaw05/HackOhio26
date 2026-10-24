@@ -7,7 +7,7 @@ import 'speech_models.dart';
 class SpeechServices {
   // localhost works on the iOS simulator; for a physical phone pass your Mac's LAN IP:
   //   flutter run --dart-define=API_BASE_URL=http://192.168.x.x:5250
-  static const String _baseUrl = String.fromEnvironment(
+  static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://localhost:5250',
   );
@@ -15,7 +15,7 @@ class SpeechServices {
   Future<PAResult> uploadAudio(
       File audioFile, String referenceText, GradingLevel level) async {
     print("attempting to post to backend");
-    final uri = Uri.parse('$_baseUrl/api/speechassess/assess');
+    final uri = Uri.parse('$baseUrl/api/speechassess/assess');
     var request = http.MultipartRequest('POST', uri)
       ..fields['referenceText'] = referenceText
       ..fields['gradinglevel'] = level.name

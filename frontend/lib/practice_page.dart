@@ -8,6 +8,7 @@ import 'phoneme_classifier.dart';
 import 'phoneme_feedback.dart';
 import 'speech_controller.dart';
 import 'speech_models.dart';
+import 'tts_service.dart';
 
 enum PracticeMode { word, phoneme }
 
@@ -26,6 +27,7 @@ class _PracticePageState extends State<PracticePage> {
   final AudioPlayer _player = AudioPlayer();
   final FaceCamera _faceCamera = FaceCamera();
   final PhonemeQualityModel _model = PhonemeQualityModel();
+  final TtsService _tts = TtsService();
   final TextEditingController _referenceTextController =
       TextEditingController(text: 'boot');
 
@@ -46,7 +48,14 @@ class _PracticePageState extends State<PracticePage> {
   String get _currentWord => _referenceTextController.text.trim();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sayWord());
+  }
+
+  @override
   void dispose() {
+    _tts.dispose();
     _speechController.dispose();
     _player.dispose();
     _faceCamera.dispose();
@@ -67,6 +76,15 @@ class _PracticePageState extends State<PracticePage> {
     });
   }
 
+  void _sayWord() {
+    if (_currentWord.isNotEmpty) _tts.speak('Say $_currentWord!');
+  }
+
+  void _sayPhoneme() {
+    final target = _targetPhoneme;
+    if (target != null) _tts.speak('Say /${target.phoneme}/.');
+  }
+
   // -------------------------
   // WORD attempt
   // -------------------------
@@ -83,6 +101,8 @@ class _PracticePageState extends State<PracticePage> {
         setState(() => _error = 'Enter the text you are going to say.');
         return;
       }
+      await _tts.stop();
+      if (!mounted) return;
       final started = await _speechController.onStartClicked(context);
       setState(() {
         _isRecording = started;
@@ -115,6 +135,7 @@ class _PracticePageState extends State<PracticePage> {
         _feedback = 'Great job! You said the word correctly.';
         _wordAttempt = 1;
       });
+      _tts.speak(_feedback!);
       return;
     }
 
@@ -131,6 +152,7 @@ class _PracticePageState extends State<PracticePage> {
       _targetPhoneme = worst;
       _feedback = "Let's practice the /${worst.phoneme}/ sound.";
     });
+    _tts.speak("Let's practice the /${worst.phoneme}/ sound. Say /${worst.phoneme}/.");
     _initCamera();
   }
 
@@ -154,6 +176,7 @@ class _PracticePageState extends State<PracticePage> {
       });
       await _handlePhonemeEvaluation();
     } else {
+      await _tts.stop();
       await _faceCamera.startFaceStream();
       setState(() {
         _isRecording = true;
@@ -204,6 +227,7 @@ class _PracticePageState extends State<PracticePage> {
       _feedback = feedback.isEmpty ? next : '$feedback $next';
       if (!canRetryWord) _wordAttempt = 1;
     });
+    _tts.speak(_feedback!);
   }
 
   Future<void> _playLastRecording() async {
@@ -226,17 +250,28 @@ class _PracticePageState extends State<PracticePage> {
             controller: _referenceTextController,
             enabled: !_isRecording && !_isAssessing,
             onChanged: (_) => _resetSession(),
+            onSubmitted: (_) => _sayWord(),
             decoration: const InputDecoration(
               labelText: 'Text to say',
               border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
-          Center(
-            child: Text(
-              isPhoneme ? '/${_targetPhoneme!.phoneme}/' : _currentWord,
-              style: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  isPhoneme ? '/${_targetPhoneme!.phoneme}/' : _currentWord,
+                  style: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Hear it',
+                onPressed: _isRecording ? null : (isPhoneme ? _sayPhoneme : _sayWord),
+                icon: const Icon(Icons.volume_up),
+              ),
+            ],
           ),
           Center(
             child: Text(
