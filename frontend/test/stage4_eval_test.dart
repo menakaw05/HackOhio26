@@ -171,6 +171,15 @@ top confusions:         ${topConfusions.take(12).map((e) => '${e.key}×${e.value
     }
   });
 
+  test('chart helpers: normalized keeps shape, closest template of a golden take is itself', () {
+    final take = golden['u']![2];
+    final z = matcher.normalized(take);
+    expect(z.length, take.length);
+    expect(z.first.length, 5);
+    expect(matcher.closestTemplate('u', take), 2);
+    expect(matcher.closestTemplate('zzz', take), isNull);
+  });
+
   test('scores are 0-1 and a sound scores higher than an unrelated one on average', () {
     final s = matcher.score('u', golden['u']!.first, exclude: 0);
     expect(s, inInclusiveRange(0, 1));

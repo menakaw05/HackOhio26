@@ -348,19 +348,48 @@ class _Stage4ScreenState extends State<Stage4Screen> {
         ),
         if (_matcher == null)
           const Center(child: CircularProgressIndicator())
-        else if (step != null && session != null) ...[
-          Text('You (last ${_windowSeconds.toStringAsFixed(2)} s)', style: AppText.caption),
-          const SizedBox(height: AppSpace.xs),
-          TrajectoryChart(series: session.windowFeatures),
-          const SizedBox(height: AppSpace.s),
-          Text('Golden /${step.phoneme}/ (take 1)', style: AppText.caption),
-          const SizedBox(height: AppSpace.xs),
-          TrajectoryChart(series: _golden?[step.phoneme]?.first ?? const []),
-          const SizedBox(height: AppSpace.s),
-          const FeatureLegend(),
-        ],
+        else if (step != null && session != null)
+          ..._charts(_matcher!, step.phoneme, session.windowFeatures),
       ],
     );
+  }
+
+  /// Both charts on the matcher's own scale (z-units, ±3), so stillness looks flat and the
+  /// two are directly comparable. Golden shows the take that's actually closest.
+  List<Widget> _charts(MouthMatcher matcher, String ipa, List<List<double>> window) {
+    const lo = -3.0, hi = 3.0;
+    final takes = _golden?[ipa] ?? const <List<List<double>>>[];
+    final closest = matcher.closestTemplate(ipa, window);
+    final shown = closest ?? 0;
+    return [
+      Text('You (last ${_windowSeconds.toStringAsFixed(2)} s)', style: AppText.caption),
+      const SizedBox(height: AppSpace.xs),
+      TrajectoryChart(series: matcher.normalized(window), min: lo, max: hi),
+      const SizedBox(height: AppSpace.s),
+      Text(
+        takes.isEmpty
+            ? 'No golden data for /$ipa/'
+            : 'Golden /$ipa/: ${closest == null ? 'take 1' : 'closest take, ${shown + 1} of ${takes.length}'} '
+                '(others faint)',
+        style: AppText.caption,
+      ),
+      const SizedBox(height: AppSpace.xs),
+      if (takes.isNotEmpty)
+        TrajectoryChart(
+          series: matcher.normalized(takes[shown]),
+          faint: [
+            for (var i = 0; i < takes.length; i++)
+              if (i != shown) matcher.normalized(takes[i]),
+          ],
+          min: lo,
+          max: hi,
+        ),
+      const SizedBox(height: AppSpace.s),
+      Text('Scale: standard deviations from your golden average (0 = middle line).',
+          style: AppText.caption),
+      const SizedBox(height: AppSpace.xs),
+      const FeatureLegend(),
+    ];
   }
 
   Widget _stage(FollowStep? step, Color boxColor) {

@@ -156,6 +156,28 @@ class MouthMatcher {
     return best;
   }
 
+  /// [frames] smoothed and z-normalized exactly as the matcher sees them (shape features only),
+  /// for charts on the matcher's own scale.
+  List<List<double>> normalized(List<List<double>> frames) =>
+      frames.isEmpty ? const [] : _normalize(_smooth(frames, config.smoothWindow), _mean, _std);
+
+  /// Index of the template (golden take) of [ipa] closest to [window], or null.
+  int? closestTemplate(String ipa, List<List<double>> window) {
+    final templates = _templates[ipa];
+    if (templates == null || window.length < 2) return null;
+    final seq = _sequence(window);
+    int? best;
+    var bestD = double.infinity;
+    for (var i = 0; i < templates.length; i++) {
+      final d = _subsequenceDtw(templates[i].seq, seq);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
   /// Distance from [window] to one template, for analysis and tuning.
   double templateDistance(String ipa, int template, List<List<double>> window) =>
       _subsequenceDtw(_templates[ipa]![template].seq, _sequence(window));
