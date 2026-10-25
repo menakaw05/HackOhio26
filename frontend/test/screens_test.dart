@@ -1,11 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'package:frontend/avatar_coach.dart';
 import 'package:frontend/data/app_state.dart';
 import 'package:frontend/data/mock/demo_seed.dart';
 import 'package:frontend/practice_services.dart';
+import 'package:frontend/stage4/follow_along.dart';
+import 'package:frontend/stage4/golden_store.dart';
+import 'package:frontend/stage4/mouth_matcher.dart';
 import 'package:frontend/router.dart';
 import 'package:frontend/theme/app_theme.dart';
 import 'package:frontend/widgets/widgets.dart';
@@ -72,7 +78,12 @@ void main() {
   });
 
   testWidgets('word practice: the word first, then the stages after a miss', (tester) async {
+    // stage 4 matches mouth movement against the golden recordings (Menaka's follow-along)
+    final golden = parseGoldenFeatures(File(goldenAsset).readAsStringSync());
+    const steps = [FollowStep('b', 130, 130), FollowStep('u', 270, 230), FollowStep('t', 510, 110)];
     final services = FakePracticeServices(
+      matcher: MouthMatcher.fromTakes(golden),
+      steps: steps,
       scores: [
         scoreOf('boot', [('b', 95), ('u', 40), ('t', 90)], accuracy: 65),
         scoreOf('boot', [('b', 95), ('u', 92), ('t', 90)], accuracy: 93),
@@ -80,7 +91,6 @@ void main() {
       lipChecks: [
         const LipCheck(passed: false, score: 0.2, tip: 'Try rounding your lips more.'), // stage 2
         const LipCheck(passed: true, score: 0.8, tip: 'Great job!'), // stage 3
-        const LipCheck(passed: true, score: 0.9, tip: 'Great job!'), // stage 4, the "oo"
       ],
     );
     createPracticeServices = () => services;
@@ -127,14 +137,22 @@ void main() {
     await sayIt();
     expect(find.text("You got it! Let's put it all together now.", skipOffstage: false), findsOneWidget);
 
-    // stage 4: one sound at a time
+    // stage 4: each sound in turn, the child's mouth movement matched against the golden
+    // recordings (here, a golden take of each sound fed in as camera frames)
     await tapText('Put it together');
-    expect(find.text('Listen to your coach, then say "buh".', skipOffstage: false), findsOneWidget);
-    await sayIt();
-    expect(find.text('Listen to your coach, then say "oo".', skipOffstage: false), findsOneWidget);
-    await sayIt();
-    expect(find.text('Listen to your coach, then say "tuh".', skipOffstage: false), findsOneWidget);
-    await sayIt();
+    var t = 0;
+    for (final step in steps) {
+      expect(find.text('Now you: say "${soundPromptFor(step.phoneme).text}" like your coach.', skipOffstage: false),
+          findsOneWidget);
+      final take = golden[step.phoneme]![0];
+      final frames = [...take, for (var i = 0; i < 12; i++) take.last];
+      for (var i = 0; i < frames.length; i++) {
+        services.onFrame!(MouthFrame(t: t + i * 42, features: frames[i], contours: const {}));
+      }
+      t += 5000;
+      await tester.pump(const Duration(milliseconds: 700)); // the green moment, then on
+      await tester.pumpAndSettle();
+    }
     expect(find.text("Now let's say the whole word!", skipOffstage: false), findsOneWidget);
 
     // stage 5: the whole word again, with the first score beside it

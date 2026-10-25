@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:camera/camera.dart';
@@ -16,6 +17,8 @@ import '../../phoneme_feedback.dart';
 import '../../practice_services.dart';
 import '../../router.dart';
 import '../../speech_models.dart';
+import '../../stage4/follow_along.dart';
+import '../../stage4/golden_store.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
@@ -81,9 +84,13 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   String? _note; // e.g. no face seen
   bool _soundDone = false;
 
-  // stage 4
-  List<Chunk> _sounds = const [];
-  int _soundIndex = 0;
+  // stage 4 (Menaka's follow-along): the coach says the word, stopping on each sound, and the
+  // camera matches the child's mouth movement against golden recordings of that sound
+  FollowAlongSession? _follow;
+  String? _followError;
+  Timer? _greenTimer; // the green moment after a sound passes
+  int _followIndex = -1;
+  FollowPhase? _followPhase;
   bool _built = false;
 
   @override
@@ -99,6 +106,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
 
   @override
   void dispose() {
+    _greenTimer?.cancel();
+    _follow?.dispose();
     _services.dispose();
     super.dispose();
   }
@@ -140,6 +149,11 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
         final pending = _coachPending;
         _coachPending = null;
         pending?.call();
+      case 'paused':
+        _follow?.coachPaused(m['index'] as int);
+      case 'finished':
+        // the stepwise word, not a demonstration of the sound
+        if (_stage == _Stage.build && m['text'] == _word.text) _follow?.coachFinished();
       case 'error':
         debugPrint('coach: ${m['message']}');
     }
@@ -164,17 +178,10 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     for (final tip in _tips) {
       coach.prepare(tip, tts: _tipTts);
     }
-    for (final s in breakDown(_word.text, _phonemes, target: _targetIndex)) {
-      coach.prepare(s.text, tts: {'ipa': s.ipa});
-    }
   }
 
-  /// What the coach shows right now: the trouble sound, or in stage 4 the current sound.
+  /// What the coach shows: the trouble sound.
   (String, Map<String, dynamic>) get _demo {
-    if (_stage == _Stage.build) {
-      final s = _sounds[_soundIndex];
-      return (s.text, _soundOpts(s.ipa, hold: s.hasTarget));
-    }
     final prompt = _prompt!;
     return (prompt.text, _soundOpts(prompt.ipa, hold: true));
   }
@@ -295,9 +302,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     _prepareCoach();
   }
 
-  /// Whether this try is checked by the camera: the trouble sound has a lip model and is
-  /// the part being said.
-  bool get _checksLips => _lipModel && (_stage != _Stage.build || _sounds[_soundIndex].hasTarget);
+  /// Whether this try is checked by the camera: the trouble sound has a lip model.
+  bool get _checksLips => _lipModel;
 
   Future<void> _toggleSoundMic() async {
     if (!_listening) {
@@ -347,9 +353,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
         }
       case _Stage.coach:
         passed ? _soundPassed() : _coachSays(_lastCheck!.tip);
-      case _Stage.build:
-        passed ? _nextSound() : _coachSays(_lastCheck!.tip);
       case _Stage.word:
+      case _Stage.build:
       case _Stage.check:
         break;
     }
@@ -383,27 +388,79 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
 
   bool get _builtBefore => context.read<AppState>().hasBuiltUp(_word.text);
 
-  void _startBuild() {
+  Future<void> _startBuild() async {
     setState(() {
       _stage = _Stage.build;
-      _sounds = breakDown(_word.text, _phonemes, target: _targetIndex);
-      _soundIndex = 0;
       _built = false;
+      _follow = null;
+      _followError = null;
       _lastCheck = null;
       _note = null;
     });
-    _coachSays("Let's put it all together. Say each sound after me.");
+    try {
+      final matcher = await _services.loadMatcher();
+      final steps = await _services.followSteps(_word.text);
+      if (matcher == null) throw StateError("the golden data didn't load");
+      if (steps.isEmpty) throw StateError('no sounds for "${_word.text}"');
+      if (!await _services.startMouthTracking(_onMouthFrame)) throw StateError('no camera');
+      if (!mounted) return;
+      final coach = _coachReady ? _coachKey.currentState : null;
+      final session = FollowAlongSession(matcher: matcher, steps: steps, useAvatar: coach != null)
+        ..addListener(_onFollowChanged);
+      setState(() => _follow = session);
+      session.start();
+      coach?.sayStepwise(_word.text, [for (final s in steps) s.pauseAtSeconds]);
+    } catch (e) {
+      debugPrint('stage 4: $e');
+      await _stopFollow();
+      if (mounted) setState(() => _followError = "Sound-by-sound practice couldn't start.");
+    }
   }
 
-  void _nextSound() {
-    if (_soundIndex + 1 < _sounds.length) {
-      setState(() {
-        _soundIndex++;
-        _lastCheck = null;
-      });
-      _demonstrate();
-      return;
+  /// Rebuilds when the sound or phase changes; the meter listens for the score itself.
+  void _onFollowChanged() {
+    final session = _follow;
+    if (session == null || !mounted) return;
+    if (session.index != _followIndex || session.phase != _followPhase) {
+      _followIndex = session.index;
+      _followPhase = session.phase;
+      setState(() {});
     }
+    if (session.phase == FollowPhase.done && !_built) _finishBuild();
+  }
+
+  void _onMouthFrame(MouthFrame? frame) {
+    final session = _follow;
+    if (session == null || frame == null || !mounted) return;
+    if (session.addFrame(frame)) {
+      AppHaptics.success();
+      _greenTimer = Timer(const Duration(milliseconds: 600), _followNext);
+    }
+  }
+
+  /// After the green moment: the coach goes on to the next sound (or it starts right away).
+  void _followNext() {
+    final session = _follow;
+    if (session == null || !mounted) return;
+    session.advance();
+    if (session.useAvatar && session.phase == FollowPhase.coach) _coachKey.currentState?.resumeStep();
+  }
+
+  /// Demo: move on without a match.
+  void _skipSound() {
+    final session = _follow;
+    if (session == null || session.phase != FollowPhase.waiting) return;
+    session.manualPass();
+    _followNext();
+  }
+
+  Future<void> _stopFollow() async {
+    _greenTimer?.cancel();
+    await _services.stopMouthTracking();
+  }
+
+  void _finishBuild() {
+    _stopFollow();
     context.read<AppState>().markBuiltUp(_word.text);
     setState(() {
       _built = true;
@@ -488,7 +545,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     // the letters to highlight: the trouble sound, or in stage 4 the sound being said
     final (int, int)? highlight = switch (_stage) {
       _Stage.sound || _Stage.coach => lettersFor(_word.text, _phonemes.length, _targetIndex),
-      _Stage.build => _built ? null : (_sounds[_soundIndex].start, _sounds[_soundIndex].end),
+      _Stage.build => _built || _follow?.current == null
+          ? null
+          : lettersFor(_word.text, _follow!.steps.length, _follow!.index),
       _Stage.word || _Stage.check => null,
     };
 
@@ -786,29 +845,58 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
         ],
       );
     }
-    final sound = _sounds[_soundIndex];
-    final check = _lastCheck;
-    final note = _note;
-    return _StepCard(
-      key: ValueKey('build-$_soundIndex'),
-      instruction: _listeningText(idle: 'Listen to your coach, then say "${sound.text}".'),
-      children: [
-        _SoundSteps(sounds: _sounds, current: _soundIndex),
-        if (note != null) ...[
-          const SizedBox(height: AppSpace.m),
-          FeedbackBanner(kind: FeedbackKind.focus, message: note),
-        ] else if (check != null && !check.passed) ...[
-          const SizedBox(height: AppSpace.m),
-          FeedbackBanner(kind: FeedbackKind.almost, message: check.tip),
+    final error = _followError;
+    if (error != null) {
+      return _StepCard(
+        key: const ValueKey('build-error'),
+        children: [
+          FeedbackBanner(kind: FeedbackKind.focus, message: error),
+          const SizedBox(height: AppSpace.l),
+          PrimaryButton(
+            label: 'Say the whole word',
+            icon: Icons.arrow_forward_rounded,
+            expand: true,
+            onPressed: () => _startAgain(skippedBuild: true),
+          ),
         ],
+      );
+    }
+    final session = _follow;
+    if (session == null) {
+      return const _StepCard(
+        key: ValueKey('build-loading'),
+        instruction: 'Getting ready…',
+        children: [Center(child: CircularProgressIndicator())],
+      );
+    }
+    final step = session.current;
+    final sound = step == null ? '' : soundPromptFor(step.phoneme).text;
+    return _StepCard(
+      key: const ValueKey('build'),
+      instruction: switch (session.phase) {
+        FollowPhase.idle || FollowPhase.coach => 'Watch your coach say each sound.',
+        FollowPhase.waiting => 'Now you: say "$sound" like your coach.',
+        FollowPhase.passed => 'Great!',
+        FollowPhase.done => null,
+      },
+      children: [
+        _SoundSteps(
+          labels: [for (final s in session.steps) soundPromptFor(s.phoneme).text],
+          current: session.index,
+        ),
         const SizedBox(height: AppSpace.l),
-        _mic(_toggleSoundMic),
-        const SizedBox(height: AppSpace.l),
-        SecondaryButton(
-          label: 'Hear it again',
-          icon: Icons.replay_rounded,
-          expand: true,
-          onPressed: _listening ? null : _demonstrate,
+        // the live meter: how close the child's mouth movement is to the sound's
+        ListenableBuilder(
+          listenable: session,
+          builder: (context, _) => _MatchMeter(
+            score: session.score,
+            threshold: session.threshold,
+            passed: session.phase == FollowPhase.passed,
+          ),
+        ),
+        TextButton(
+          onPressed: session.phase == FollowPhase.waiting ? _skipSound : null,
+          child: const Text('Skip this sound'),
         ),
       ],
     );
@@ -887,9 +975,9 @@ class _HighlightedWord extends StatelessWidget {
 
 /// Stage 4's sounds in order: done ones checked, the current one highlighted.
 class _SoundSteps extends StatelessWidget {
-  const _SoundSteps({required this.sounds, required this.current});
+  const _SoundSteps({required this.labels, required this.current});
 
-  final List<Chunk> sounds;
+  final List<String> labels;
   final int current;
 
   @override
@@ -899,7 +987,7 @@ class _SoundSteps extends StatelessWidget {
       spacing: AppSpace.s,
       runSpacing: AppSpace.s,
       children: [
-        for (var i = 0; i < sounds.length; i++)
+        for (var i = 0; i < labels.length; i++)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.m, vertical: AppSpace.s),
             decoration: BoxDecoration(
@@ -919,13 +1007,61 @@ class _SoundSteps extends StatelessWidget {
                   const Icon(Icons.check_rounded, size: 18, color: AppColors.success),
                   const SizedBox(width: AppSpace.xs),
                 ],
-                Text(sounds[i].text,
+                Text(labels[i],
                     style: AppText.section.copyWith(
                         color: i == current ? AppColors.lotusDeep : AppColors.ink)),
               ],
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Stage 4's live meter: how closely the child's mouth movement matches the sound, with a
+/// mark where it passes.
+class _MatchMeter extends StatelessWidget {
+  const _MatchMeter({required this.score, required this.threshold, required this.passed});
+
+  final double score;
+  final double threshold;
+  final bool passed;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = passed ? 1.0 : score.clamp(0.0, 1.0);
+    final color = passed || score >= threshold ? AppColors.success : AppColors.lake;
+    return Semantics(
+      label: passed ? 'Matched' : 'Match ${(value * 100).round()} percent',
+      excludeSemantics: true,
+      child: LayoutBuilder(
+        builder: (context, box) => Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: 24,
+              decoration: BoxDecoration(
+                color: AppColors.lakeMist,
+                borderRadius: AppRadius.pillRadius,
+                border: Border.all(color: AppColors.lakeDeep, width: 2),
+              ),
+            ),
+            AnimatedContainer(
+              duration: AppMotion.fast,
+              height: 24,
+              width: box.maxWidth * value,
+              decoration: BoxDecoration(color: color, borderRadius: AppRadius.pillRadius),
+            ),
+            // where it passes
+            Positioned(
+              left: box.maxWidth * threshold - 2,
+              top: -4,
+              bottom: -4,
+              child: Container(width: 4, color: AppColors.lotusDeep),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

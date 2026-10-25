@@ -84,6 +84,14 @@ class AvatarViewState extends State<AvatarView> {
     );
   }
 
+  /// Stage 4: say [text], stopping at each time in [pauseAt] (seconds, one per sound) until
+  /// [resumeStep]. Sends {"event":"paused","index":i} at each stop.
+  Future<void> sayStepwise(String text, List<double> pauseAt) => controller.runJavaScript(
+        'window.sayStepwise(${jsonEncode(text)}, ${jsonEncode(pauseAt)});',
+      );
+
+  Future<void> resumeStep() => controller.runJavaScript('window.resumeStep();');
+
   Future<void> setXray(bool on) =>
       controller.runJavaScript('window.avatar.setXray(${on ? 'true' : 'false'});');
 
