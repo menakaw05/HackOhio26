@@ -4,8 +4,8 @@ import '../../data/models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
-/// An ocean map: lessons along a winding current. Done ones are gold sand dollars, the
-/// current one has the octopus on it, locked ones are still bubbles.
+/// An ocean map: lessons are shells along a winding current. Done ones are gold, the
+/// current one has the octopus on it, locked ones are grey.
 class LessonPath extends StatelessWidget {
   const LessonPath({super.key, required this.lessons, required this.onOpen});
 
@@ -62,9 +62,9 @@ class _LessonNodeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, icon, size) = switch (lesson.status) {
-      LessonStatus.done => (AppColors.sun, Icons.check_rounded, 60.0),
+      LessonStatus.done => (AppColors.sun, Icons.check_rounded, 64.0),
       LessonStatus.current => (AppColors.lotusBlush, Icons.play_arrow_rounded, 72.0),
-      LessonStatus.locked => (AppColors.line, Icons.lock_rounded, 60.0),
+      LessonStatus.locked => (AppColors.line, Icons.lock_rounded, 64.0),
     };
     return Semantics(
       button: true,
@@ -77,22 +77,16 @@ class _LessonNodeView extends StatelessWidget {
             SizedBox(
               height: 72,
               child: Center(
-                child: Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.lakeDeep, width: 2.5),
-                    boxShadow: AppShadows.soft,
-                  ),
+                child: Shell(
+                  color: color,
+                  size: size,
                   child: lesson.status == LessonStatus.current
-                      ? const OctopusBuddy(size: 66, bubbles: false)
+                      ? OctopusBuddy(size: size * 0.8, bubbles: false)
                       : Icon(icon,
                           color: lesson.status == LessonStatus.locked
                               ? AppColors.inkFaint
                               : AppColors.lakeDeep,
-                          size: 30),
+                          size: 26),
                 ),
               ),
             ),

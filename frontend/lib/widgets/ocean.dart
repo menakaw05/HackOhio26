@@ -178,3 +178,83 @@ class _StarfishPainter extends CustomPainter {
   @override
   bool shouldRepaint(_StarfishPainter old) => old.color != color;
 }
+
+/// A scallop shell, e.g. a stop on the lesson path, with [child] sitting on it.
+class Shell extends StatelessWidget {
+  const Shell({super.key, required this.color, this.size = 64, this.child});
+
+  final Color color;
+  final double size;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = this.child;
+    return SizedBox.square(
+      dimension: size,
+      child: CustomPaint(
+        painter: _ShellPainter(color),
+        child: child == null
+            ? null
+            : Padding(padding: EdgeInsets.only(bottom: size * 0.14), child: Center(child: child)),
+      ),
+    );
+  }
+}
+
+class _ShellPainter extends CustomPainter {
+  _ShellPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.width;
+    final c = Offset(s * 0.5, s * 0.58);
+    final r = s * 0.44;
+    final base = Offset(s * 0.5, s * 0.9);
+    const start = math.pi + 0.25;
+    const sweep = math.pi - 0.5;
+    const bumps = 6;
+    Offset at(double a, [double k = 1]) => c + Offset(math.cos(a), math.sin(a)) * r * k;
+
+    // the fan, with a scalloped top edge
+    final fan = Path()
+      ..moveTo(base.dx, base.dy)
+      ..lineTo(at(start).dx, at(start).dy);
+    for (var i = 0; i < bumps; i++) {
+      final a0 = start + sweep * i / bumps;
+      final a1 = start + sweep * (i + 1) / bumps;
+      final bulge = at((a0 + a1) / 2, 1.16);
+      fan.quadraticBezierTo(bulge.dx, bulge.dy, at(a1).dx, at(a1).dy);
+    }
+    fan.close();
+    // the little "ears" at the hinge
+    final ears = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: base + Offset(0, -s * 0.02), width: s * 0.36, height: s * 0.12),
+        Radius.circular(s * 0.04));
+
+    final outline = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = s * 0.035
+      ..strokeJoin = StrokeJoin.round
+      ..color = AppColors.lakeDeep;
+    canvas.drawPath(fan.shift(Offset(0, s * 0.05)), Paint()..color = AppColors.lakeDeep);
+    canvas.drawRRect(ears, Paint()..color = color);
+    canvas.drawRRect(ears, outline);
+    canvas.drawPath(fan, Paint()..color = color);
+    // ribs fanning out from the hinge
+    final rib = Paint()
+      ..strokeWidth = s * 0.03
+      ..strokeCap = StrokeCap.round
+      ..color = AppColors.edgeOf(color).withValues(alpha: 0.35);
+    for (var i = 1; i < bumps; i++) {
+      final a = start + sweep * i / bumps;
+      canvas.drawLine(base + Offset(0, -s * 0.06), at(a, 0.92), rib);
+    }
+    canvas.drawPath(fan, outline);
+  }
+
+  @override
+  bool shouldRepaint(_ShellPainter old) => old.color != color;
+}
