@@ -69,6 +69,13 @@ class AvatarViewState extends State<AvatarView> {
     );
   }
 
+  /// Say several things back to back (e.g. a tip, then the sound), each as
+  /// (text, opts) like say().
+  Future<void> sayAll(List<(String, Map<String, dynamic>)> items) {
+    final list = [for (final (text, opts) in items) [text, opts]];
+    return controller.runJavaScript('window.sayAll(${jsonEncode(list)});');
+  }
+
   /// Synthesize a clip ahead of time so a later say() with the same text and
   /// tts options starts right away.
   Future<void> prepare(String text, {Map<String, dynamic>? tts}) {

@@ -50,6 +50,12 @@ const clipFor = (text, tts) => {
 };
 window.prepare = (text, tts) => clipFor(text, tts).then(() => true, () => false);
 
+// Say several things back to back, e.g. a tip and then the sound, without a
+// round trip to the app in between. items: [[text, opts], ...]
+window.sayAll = async (items) => {
+  for (const [text, opts] of items) await window.say(text, opts ?? {});
+};
+
 window.say = async (text, opts = {}) => {
   try {
     const clip = await clipFor(text, opts.tts);
