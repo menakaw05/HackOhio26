@@ -158,6 +158,19 @@ top confusions:         ${topConfusions.take(12).map((e) => '${e.key}×${e.value
     expect(slow2Pass / total, greaterThan(0.6), reason: 'learners follow along slowly');
   }, timeout: const Timeout(Duration(minutes: 5)));
 
+  test('every sound has a finite σ and scores stay between 0 and 1', () {
+    for (final p in phonemes) {
+      expect(matcher.sigmaFor(p)!.isFinite, isTrue, reason: p);
+    }
+    for (final p in ['k', 'ŋ', 'b', 't']) {
+      for (final q in phonemes) {
+        final s = matcher.score(q, golden[p]!.first);
+        expect(s.isNaN, isFalse, reason: '$p vs $q');
+        expect(s, inInclusiveRange(0, 1));
+      }
+    }
+  });
+
   test('scores are 0-1 and a sound scores higher than an unrelated one on average', () {
     final s = matcher.score('u', golden['u']!.first, exclude: 0);
     expect(s, inInclusiveRange(0, 1));

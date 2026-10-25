@@ -156,6 +156,10 @@ class MouthMatcher {
     return best;
   }
 
+  /// Distance from [window] to one template, for analysis and tuning.
+  double templateDistance(String ipa, int template, List<List<double>> window) =>
+      _subsequenceDtw(_templates[ipa]![template].seq, _sequence(window));
+
   /// 0–1 similarity of [window] to [ipa]; 0 when the window barely moves.
   double score(String ipa, List<List<double>> window, {int? exclude}) {
     final sigma = _sigma[ipa];
@@ -165,6 +169,7 @@ class MouthMatcher {
     final templateMotion = templates.map((t) => t.motion).reduce((a, b) => a + b) / templates.length;
     if (motion < config.minMotionRatio * templateMotion) return 0;
     final d = distance(ipa, window, exclude: exclude);
+    if (!d.isFinite) return 0;
     return math.exp(-math.ln2 * math.pow(d / sigma, 2));
   }
 
@@ -266,22 +271,23 @@ class MouthMatcher {
   /// (as if it were live) against the other takes' templates.
   double _calibrate(String ipa, List<List<List<double>>> takes) {
     if (takes.length < 2) return 1;
-    final d = [for (var i = 0; i < takes.length; i++) distance(ipa, takes[i], exclude: i)]..sort();
+    final d = [
+      for (var i = 0; i < takes.length; i++) distance(ipa, takes[i], exclude: i)
+    ].where((x) => x.isFinite).toList()
+      ..sort();
+    if (d.isEmpty) return 1;
     final idx = ((d.length - 1) * config.sigmaPercentile).round();
     return math.max(d[idx], 1e-6);
   }
 
-  /// Longest matched stretch, as a multiple of the template length (slow learners).
-  static const _maxStretch = 3;
-
   /// Slope constraint: at most this many horizontal (or vertical) steps in a row, so one frame
-  /// can't soak up a long run of near-identical frames and dilute the cost.
+  /// can't soak up a long run of near-identical frames and dilute the cost. With 2, the matched
+  /// stretch is between a third and three times the template length.
   static const _maxRun = 2;
 
   /// Subsequence DTW of [query] (template) inside [stream], with free start and end in the
-  /// stream and the matched stretch between half and [_maxStretch]× the query length.
-  /// Symmetric step weights (diagonal ×2) normalized by both lengths, with a slope constraint,
-  /// so a slower match isn't penalized for being longer (Sakoe & Chiba 1978).
+  /// stream. Symmetric step weights (diagonal ×2) normalized by both lengths, with a slope
+  /// constraint, so a slower match isn't penalized for being longer (Sakoe & Chiba 1978).
   static double _subsequenceDtw(List<List<double>> query, List<List<double>> stream) {
     final n = query.length;
     final m = stream.length;
@@ -342,11 +348,12 @@ class MouthMatcher {
       prevVRun = vRun;
     }
 
+    // the slope constraint already bounds the matched length; filtering lengths here instead
+    // would throw away the only (cheapest) path into a cell and leave no match at all
     var best = inf;
     for (var j = 0; j < m; j++) {
       if (prevCost[j] == inf) continue;
       final length = j - prevStart[j] + 1;
-      if (length * 2 < n || length > n * _maxStretch) continue;
       best = math.min(best, prevCost[j] / (n + length));
     }
     return best;
