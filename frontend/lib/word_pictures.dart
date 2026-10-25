@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-/// eLEXir's word-image service (Azure): a picture per word, cached in Cosmos + Blob. A word
-/// it hasn't seen gets drawn by DALL-E in the background, answering 202 until it's ready.
-///   flutter run --dart-define=IMAGES_URL=https://...
+import 'speech_services.dart';
+
+/// Word pictures from our backend (backend/WordImageEndpoint.cs): drawn once by the Azure
+/// image deployment, then kept. A word not drawn yet answers 202 until it's ready (about
+/// 40 s). Same contract as eLEXir's image service, which IMAGES_URL can point at instead.
 const String imagesBaseUrl = String.fromEnvironment(
   'IMAGES_URL',
-  defaultValue: 'https://elexirbackend-fqcub0hjhuaze2ey.eastus-01.azurewebsites.net',
+  defaultValue: SpeechServices.baseUrl,
 );
 
 abstract final class WordPictures {
@@ -26,8 +28,8 @@ abstract final class WordPictures {
   }
 
   static Future<String?> _fetch(String word) async {
-    // while it's being drawn, check back a few times
-    for (var tries = 0; tries < 4; tries++) {
+    // while it's being drawn (about 40 s), check back for a minute
+    for (var tries = 0; tries < 7; tries++) {
       try {
         final res = await http
             .get(Uri.parse('$imagesBaseUrl/api/images/get').replace(queryParameters: {'word': word}))
