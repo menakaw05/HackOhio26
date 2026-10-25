@@ -6,6 +6,10 @@ import 'face_camera.dart';
 import 'phoneme_classifier.dart';
 import 'speech_controller.dart';
 import 'speech_models.dart';
+import 'stage4/follow_along.dart';
+import 'stage4/golden_store.dart';
+import 'stage4/mouth_matcher.dart';
+import 'stage4/mouth_tracker.dart';
 import 'tts_service.dart';
 
 /// One sound attempt judged by the ONNX lip model.
@@ -46,6 +50,20 @@ abstract class PracticeServices {
   /// The avatar page for the coach, or null to show a placeholder.
   String? get coachUrl;
 
+  /// Stage 4 (Menaka's follow-along): the matcher built from the bundled golden data, or null
+  /// if it can't load.
+  Future<MouthMatcher?> loadMatcher();
+
+  /// Stage 4: the sounds of [word] and when the coach says each one.
+  Future<List<FollowStep>> followSteps(String word);
+
+  /// Stage 4: the camera moves to the mouth tracker, which calls [onFrame] for every frame
+  /// (fast ML Kit, so movement over time is smooth). False without a camera.
+  Future<bool> startMouthTracking(void Function(MouthFrame? frame) onFrame);
+
+  /// Gives the camera back to the mirror.
+  Future<void> stopMouthTracking();
+
   void dispose();
 }
 
@@ -57,6 +75,10 @@ class LivePracticeServices implements PracticeServices {
   final TtsService _tts = TtsService();
   final FaceCamera _faceCamera = FaceCamera();
   final PhonemeQualityModel _lips = PhonemeQualityModel();
+  MouthTracker? _tracker;
+
+  // building the matcher from 7 MB of golden data takes a moment; once per app run
+  static Future<MouthMatcher?>? _matcher;
 
   @override
   Future<void> speak(String text) => _tts.speak(text);
@@ -85,7 +107,11 @@ class LivePracticeServices implements PracticeServices {
   }
 
   @override
-  CameraController? get camera => _faceCamera.isInitialized ? _faceCamera.controller : null;
+  CameraController? get camera {
+    final tracker = _tracker;
+    if (tracker != null) return tracker.isInitialized ? tracker.controller : null;
+    return _faceCamera.isInitialized ? _faceCamera.controller : null;
+  }
 
   @override
   Future<List<String>> loadLipModel(String phoneme) async {
@@ -114,7 +140,37 @@ class LivePracticeServices implements PracticeServices {
   String get coachUrl => '$avatarBaseUrl/?embed=1&frame=0,0,1,1';
 
   @override
+  Future<MouthMatcher?> loadMatcher() => _matcher ??= MouthMatcher.loadBundled().then<MouthMatcher?>(
+        (m) => m,
+        onError: (Object e) {
+          debugPrint('stage 4 matcher: $e');
+          _matcher = null;
+          return null;
+        },
+      );
+
+  @override
+  Future<List<FollowStep>> followSteps(String word) => fetchFollowSteps(word);
+
+  @override
+  Future<bool> startMouthTracking(void Function(MouthFrame? frame) onFrame) async {
+    await _faceCamera.release();
+    final tracker = MouthTracker()..onFrame = onFrame;
+    _tracker = tracker;
+    return tracker.start();
+  }
+
+  @override
+  Future<void> stopMouthTracking() async {
+    final tracker = _tracker;
+    _tracker = null;
+    await tracker?.dispose();
+    await startCamera();
+  }
+
+  @override
   void dispose() {
+    _tracker?.dispose();
     _tts.dispose();
     _speech.dispose();
     _faceCamera.dispose();

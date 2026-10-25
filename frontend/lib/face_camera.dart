@@ -58,6 +58,15 @@ class FaceCamera {
     }
   }
 
+  /// Frees the camera for something else (stage 4's mouth tracker); [initialize] takes it
+  /// back. The face detector stays open.
+  Future<void> release() async {
+    if (_isStreaming) await _controller?.stopImageStream();
+    _isStreaming = false;
+    await _controller?.dispose();
+    _controller = null;
+  }
+
   /// Starts buffering mouth contours from the camera stream.
   Future<void> startFaceStream() async {
     final controller = _controller;
