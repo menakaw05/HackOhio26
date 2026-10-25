@@ -4,9 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:frontend/data/app_state.dart';
+import 'package:frontend/practice_services.dart';
 import 'package:frontend/router.dart';
 import 'package:frontend/theme/app_theme.dart';
 import 'package:frontend/widgets/widgets.dart';
+
+import 'fake_practice_services.dart';
 
 /// Pumps the real app router at [location] as [learner], on an iPhone-sized screen.
 Future<GoRouter> pumpAt(WidgetTester tester, String location, {String learner = 'maya'}) async {
@@ -30,6 +33,10 @@ Future<GoRouter> pumpAt(WidgetTester tester, String location, {String learner = 
 }
 
 void main() {
+  // no backend, camera or avatar page in tests
+  setUp(() => createPracticeServices = FakePracticeServices.new);
+  tearDown(() => createPracticeServices = LivePracticeServices.new);
+
   testWidgets('home shows the demo learner, next word, and lesson path', (tester) async {
     await pumpAt(tester, Routes.home);
     expect(tester.takeException(), isNull);
@@ -58,6 +65,17 @@ void main() {
   });
 
   testWidgets('word practice walks hear, watch, try, feedback', (tester) async {
+    final services = FakePracticeServices(
+      scores: [
+        scoreOf('boot', [('b', 95), ('u', 40), ('t', 90)], accuracy: 65),
+        scoreOf('boot', [('b', 95), ('u', 92), ('t', 90)], accuracy: 93),
+      ],
+      lipChecks: [
+        const LipCheck(passed: false, score: 0.2, tip: 'Try rounding your lips more.'),
+        const LipCheck(passed: true, score: 0.8, tip: 'Great job!'),
+      ],
+    );
+    createPracticeServices = () => services;
     await pumpAt(tester, Routes.wordPractice('boot'));
     expect(tester.takeException(), isNull);
     expect(find.text('boot'), findsOneWidget);
@@ -85,12 +103,23 @@ void main() {
     expect(find.text('Guidance'), findsOneWidget);
     await tapText('Next: Try');
     await sayIt();
+    // Azure: the /u/ was weak, and /u/ has a lip model
     expect(find.text('Almost!'), findsOneWidget);
-    expect(find.text('Round your lips a little more.'), findsOneWidget);
+    expect(find.text("Let's work on the /u/ sound."), findsOneWidget);
 
-    await tapText('Try again');
+    await tapText('Practice the /u/ sound');
+    expect(services.lipModel, 'u');
+    expect(find.text('Tap the mic and say "oo".'), findsOneWidget);
+    await sayIt();
+    // a miss: the lip model's tip, and the coach demonstrates
+    expect(find.text('Try rounding your lips more.'), findsOneWidget);
+    expect(find.text('Watch your coach, then say "oo".'), findsOneWidget);
+    await sayIt();
+    expect(find.text('You got the /u/ sound! Now say the whole word.'), findsOneWidget);
+
     await sayIt();
     expect(find.text('Great!'), findsOneWidget);
+    expect(find.text('You said "boot" clearly!'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
