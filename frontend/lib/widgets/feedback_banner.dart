@@ -36,8 +36,8 @@ class FeedbackBanner extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // the octopus cheers a great try and smiles at the rest
-            OctopusBuddy(
+            // the beluga cheers a great try and smiles at the rest
+            BelugaBuddy(
               size: 70,
               mood: kind == FeedbackKind.success ? BuddyMood.happy : BuddyMood.idle,
               bubbles: false,

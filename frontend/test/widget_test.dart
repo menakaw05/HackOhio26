@@ -7,7 +7,7 @@ import 'package:frontend/practice_page.dart';
 void main() {
   testWidgets('app opens on the profile picker and enters the shell', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
-    // Reduce Motion on, so the octopus holds still and pumpAndSettle can settle
+    // Reduce Motion on, so the beluga holds still and pumpAndSettle can settle
     tester.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures(disableAnimations: true);
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);

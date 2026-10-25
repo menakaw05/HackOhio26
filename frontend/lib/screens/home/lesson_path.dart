@@ -5,7 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
 /// An ocean map: lessons are shells along a winding current. Done ones are gold, the
-/// current one has the octopus on it, locked ones are grey.
+/// current one has the beluga on it, locked ones are grey.
 class LessonPath extends StatelessWidget {
   const LessonPath({super.key, required this.lessons, required this.onOpen});
 
@@ -81,7 +81,7 @@ class _LessonNodeView extends StatelessWidget {
                   color: color,
                   size: size,
                   child: lesson.status == LessonStatus.current
-                      ? OctopusBuddy(size: size * 0.8, bubbles: false)
+                      ? BelugaBuddy(size: size * 0.8, bubbles: false)
                       : Icon(icon,
                           color: lesson.status == LessonStatus.locked
                               ? AppColors.inkFaint

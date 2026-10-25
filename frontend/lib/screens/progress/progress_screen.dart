@@ -221,7 +221,7 @@ class _Aquarium extends StatelessWidget {
                   child: Text('Master a sound to add your first fish!',
                       style: AppText.bodyStrong.copyWith(color: Colors.white)),
                 ),
-              Positioned(right: 10, top: h * 0.5, child: const OctopusBuddy(size: 64, bubbles: true)),
+              Positioned(right: 6, top: h * 0.42, child: const BelugaBuddy(size: 84, bubbles: true)),
             ],
           );
         }),

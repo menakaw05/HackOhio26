@@ -180,7 +180,7 @@ class _ContinueCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const OctopusBuddy(size: 96),
+              const BelugaBuddy(size: 96),
             ],
           ),
           if (word != null) ...[
