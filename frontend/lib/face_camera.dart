@@ -13,7 +13,9 @@ class FaceCamera {
     options: FaceDetectorOptions(
       enableContours: true,
       enableClassification: true,
-      performanceMode: FaceDetectorMode.accurate,
+      // fast: about 3x the frames of accurate with the avatar running (CLAUDE.md benchmark),
+      // so a short sound still gets several frames for the lip model
+      performanceMode: FaceDetectorMode.fast,
     ),
   );
 
