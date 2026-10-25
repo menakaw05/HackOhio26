@@ -5,12 +5,14 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:share_plus/share_plus.dart';
 
 import '../../avatar_view.dart';
 import '../../stage4/follow_along.dart';
 import '../../stage4/golden_store.dart';
 import '../../stage4/mouth_matcher.dart';
 import '../../stage4/mouth_tracker.dart';
+import '../../stage4/session_log.dart';
 import '../../stage4/trajectory_chart.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
@@ -43,6 +45,10 @@ class _Stage4ScreenState extends State<Stage4Screen> {
   double _windowSeconds = 0.75;
   String? _status;
   bool _loadingSteps = false;
+
+  /// Debug recording: no auto-pass; "Next sound" moves on and everything is logged.
+  bool _manual = false;
+  Stage4SessionLog? _log;
 
   MouthMatcher? _matcher;
   Map<String, List<List<List<double>>>>? _golden;
@@ -85,18 +91,43 @@ class _Stage4ScreenState extends State<Stage4Screen> {
 
   void _onFrame(MouthFrame? frame) {
     final session = _session;
-    if (frame == null || session == null || !mounted) return;
-    if (session.addFrame(frame)) {
+    if (session == null || !mounted) return;
+    if (frame != null && session.addFrame(frame)) {
       AppHaptics.success();
       setState(() => _status = 'Great!');
       _greenTimer = Timer(_greenPause, _advance);
     }
+    // log after scoring, so each frame carries the score it produced
+    _log?.frame(_tracker.nowMs, frame, session);
+  }
+
+  /// Debug recording: the learner made the sound; move on.
+  void _manualNext() {
+    final session = _session;
+    if (session == null || session.phase != FollowPhase.waiting) return;
+    _log?.event(_tracker.nowMs, 'next', index: session.index);
+    session.manualPass();
+    _advance();
+  }
+
+  Future<void> _exportLog(BuildContext buttonContext) async {
+    final log = _log;
+    if (log == null) return;
+    final file = await log.writeFile();
+    if (!buttonContext.mounted) return;
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile(file.path, mimeType: 'application/json')],
+      subject: 'mirrorU stage 4 session: ${log.word}',
+      sharePositionOrigin: box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+    ));
   }
 
   void _advance() {
     final session = _session;
     if (session == null) return;
     session.advance();
+    _log?.event(_tracker.nowMs, session.phase.name, index: session.index);
     if (session.useAvatar && session.phase == FollowPhase.coach) {
       _avatarKey.currentState?.controller.runJavaScript('window.resumeStep();');
     }
@@ -122,10 +153,23 @@ class _Stage4ScreenState extends State<Stage4Screen> {
         useAvatar: _useAvatar,
         threshold: _threshold,
         window: Duration(milliseconds: (_windowSeconds * 1000).round()),
+        autoPass: !_manual,
       )..addListener(() => setState(() {}));
       _session?.dispose();
-      setState(() => _session = session);
+      setState(() {
+        _session = session;
+        _log = Stage4SessionLog(
+          word: word,
+          steps: steps,
+          useAvatar: _useAvatar,
+          threshold: _threshold,
+          windowMs: (_windowSeconds * 1000).round(),
+          config: matcher.config,
+        );
+      });
       session.start();
+      _log!.event(_tracker.nowMs, 'start');
+      _log!.event(_tracker.nowMs, session.phase.name, index: session.index);
       if (_useAvatar) {
         final pauses = jsonEncode([for (final s in steps) s.pauseAtSeconds]);
         await _avatarKey.currentState?.controller
@@ -145,9 +189,11 @@ class _Stage4ScreenState extends State<Stage4Screen> {
       case 'ready':
         setState(() => _avatarReady = true);
       case 'paused':
+        _log?.event(_tracker.nowMs, 'avatarPaused', index: m['index'] as int);
         _session?.coachPaused(m['index'] as int);
         _updateStatus();
       case 'finished':
+        _log?.event(_tracker.nowMs, 'avatarFinished');
         _session?.coachFinished();
         _updateStatus();
       case 'error':
@@ -162,7 +208,9 @@ class _Stage4ScreenState extends State<Stage4Screen> {
       _status = switch (s.phase) {
         FollowPhase.idle => null,
         FollowPhase.coach => 'Watch the coach…',
-        FollowPhase.waiting => 'Your turn: say /${s.current!.phoneme}/ like the coach.',
+        FollowPhase.waiting => _manual
+            ? 'Say /${s.current!.phoneme}/, then tap Next sound.'
+            : 'Your turn: say /${s.current!.phoneme}/ like the coach.',
         FollowPhase.passed => 'Great!',
         FollowPhase.done => 'All sounds done!',
       };
@@ -216,11 +264,42 @@ class _Stage4ScreenState extends State<Stage4Screen> {
           value: _useAvatar,
           onChanged: running ? null : (v) => setState(() => _useAvatar = v),
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text('Manual (record for debugging)', style: AppText.bodyStrong),
+          subtitle: Text(
+            "Sounds don't auto-pass; tap Next sound after each correct attempt. "
+            'Every frame is logged for export.',
+            style: AppText.caption,
+          ),
+          value: _manual,
+          onChanged: running ? null : (v) => setState(() => _manual = v),
+        ),
         const SizedBox(height: AppSpace.s),
         _stage(step, boxColor),
         const SizedBox(height: AppSpace.m),
         if (_status != null)
           Text(_status!, style: AppText.section, textAlign: TextAlign.center),
+        if (_manual && session != null) ...[
+          const SizedBox(height: AppSpace.m),
+          PrimaryButton(
+            label: 'Next sound',
+            icon: Icons.skip_next_rounded,
+            expand: true,
+            onPressed: session.phase == FollowPhase.waiting ? _manualNext : null,
+          ),
+        ],
+        if (_log != null) ...[
+          const SizedBox(height: AppSpace.s),
+          Builder(
+            builder: (buttonContext) => SecondaryButton(
+              label: 'Export session (${_log!.frameCount} frames)',
+              icon: Icons.ios_share_rounded,
+              expand: true,
+              onPressed: () => _exportLog(buttonContext),
+            ),
+          ),
+        ],
         if (session != null) ...[
           const SizedBox(height: AppSpace.m),
           Wrap(

@@ -51,7 +51,11 @@ class FollowAlongSession extends ChangeNotifier {
     this.threshold = 0.5,
     this.window = const Duration(milliseconds: 750),
     this.hold = const Duration(milliseconds: 300),
+    this.autoPass = true,
   });
+
+  /// False for debug recording: scores are still computed, but only [manualPass] moves on.
+  final bool autoPass;
 
   final MouthMatcher matcher;
   final List<FollowStep> steps;
@@ -110,6 +114,10 @@ class FollowAlongSession extends ChangeNotifier {
 
     // a sound with no golden data can't be checked, so it passes
     score = matcher.hasPhoneme(step.phoneme) ? matcher.score(step.phoneme, windowFeatures) : 1;
+    if (!autoPass) {
+      notifyListeners();
+      return false;
+    }
     if (score >= threshold) {
       _aboveSince ??= frame.t;
       if (frame.t - _aboveSince! >= hold.inMilliseconds) {
@@ -122,6 +130,13 @@ class FollowAlongSession extends ChangeNotifier {
     }
     notifyListeners();
     return false;
+  }
+
+  /// Debug recording: the learner says they made the sound; treat it as passed.
+  void manualPass() {
+    if (phase != FollowPhase.waiting) return;
+    phase = FollowPhase.passed;
+    notifyListeners();
   }
 
   /// After the green moment: on to the next sound (the avatar continues, or the next sound

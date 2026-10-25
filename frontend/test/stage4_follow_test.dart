@@ -6,6 +6,7 @@ import 'package:frontend/router.dart';
 import 'package:frontend/stage4/follow_along.dart';
 import 'package:frontend/stage4/golden_store.dart';
 import 'package:frontend/stage4/mouth_matcher.dart';
+import 'package:frontend/stage4/session_log.dart';
 import 'screens_test.dart' show pumpAt;
 
 void main() {
@@ -85,5 +86,46 @@ void main() {
     expect(find.text('Step through the sounds without the avatar'), findsOneWidget);
     expect(find.text('Tuning'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  test('manual mode scores but never auto-passes; Next sound moves on and everything is logged', () {
+    final s = FollowAlongSession(matcher: matcher, steps: steps, useAvatar: false, autoPass: false)
+      ..start();
+    final log = Stage4SessionLog(
+      word: 'boot',
+      steps: steps,
+      useAvatar: false,
+      threshold: 0.5,
+      windowMs: 750,
+      config: matcher.config,
+    )..event(0, 'start');
+
+    final frames = [...golden['b']!.first, for (var i = 0; i < 12; i++) golden['b']!.first.last];
+    var maxScore = 0.0;
+    for (var i = 0; i < frames.length; i++) {
+      final f = MouthFrame(t: i * 42, features: frames[i], contours: const {'face': [1, 2]});
+      expect(s.addFrame(f), isFalse);
+      maxScore = s.score > maxScore ? s.score : maxScore;
+      log.frame(i * 42, f, s);
+    }
+    log.frame(999, null, s); // a frame with no face
+    expect(maxScore, greaterThan(0.5), reason: 'still scored');
+    expect(s.phase, FollowPhase.waiting);
+
+    s.manualPass();
+    log.event(1000, 'next', index: 0);
+    s.advance();
+    expect(s.current!.phoneme, 'u');
+
+    final json = log.toJson();
+    expect(json['word'], 'boot');
+    expect((json['steps'] as List).length, 3);
+    expect((json['events'] as List).last, {'t': 1000, 'type': 'next', 'index': 0});
+    final logged = json['frames'] as List;
+    expect(logged.length, frames.length + 1);
+    expect((logged.first as Map)['f'], hasLength(5));
+    expect((logged.first as Map)['c'], {'face': [1, 2]});
+    expect((logged.last as Map).containsKey('f'), isFalse);
+    expect((json['config'] as Map)['trimFraction'], matcher.config.trimFraction);
   });
 }

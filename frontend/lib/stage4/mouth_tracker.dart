@@ -38,6 +38,9 @@ class MouthTracker {
   void Function(MouthFrame? frame)? onFrame;
 
   CameraController? get controller => _controller;
+
+  /// Milliseconds on the same clock as [MouthFrame.t].
+  int get nowMs => _clock.elapsedMilliseconds;
   bool get isInitialized => _controller?.value.isInitialized ?? false;
 
   /// Returns false if there's no front camera (e.g. the simulator) or it can't start.
