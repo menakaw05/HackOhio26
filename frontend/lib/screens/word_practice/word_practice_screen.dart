@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../avatar_coach.dart';
 import '../../avatar_view.dart';
+import '../../data/app_state.dart';
 import '../../data/mock/demo_seed.dart';
 import '../../data/models.dart';
 import '../../data/practice_queue.dart';
@@ -18,26 +19,29 @@ import '../../speech_models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
-enum _Step { hear, watch, tryIt, feedback }
+/// The practice flow for one word (CLAUDE.md, "Practice flow").
+enum _Stage { word, sound, coach, build, check }
 
-const _stepLabels = ['Hear', 'Watch', 'Try', 'Feedback'];
-const _maxAttempts = 3;
+const _stageLabels = ['Word', 'Sound', 'Coach', 'Sounds', 'Again'];
 const _passScore = 80.0; // Azure word accuracy; 60-80 is "almost"
 
-// The coach says words at a normal pace (slower in slow motion) and tips a
-// little slower; sounds are demonstrated slower still (the page's default).
-const Map<String, dynamic> _wordTts = {'rate': '0%'};
-const Map<String, dynamic> _slowTts = {'rate': '-30%'};
+// The coach says tips a little slower than normal; sounds are demonstrated slower still
+// (the avatar page's default).
 const Map<String, dynamic> _tipTts = {'rate': '-10%'};
 
-/// The hero screen: Hear → Watch → Try → Feedback for one word.
+/// The hero screen: one word, and the stages that help with it if it's missed.
 ///
-/// The first try is unaided: Watch (the coach) opens only after a miss.
-/// Try scores the word with Azure. If the weakest sound has a lip model
-/// (/p/, /æ/, /u/), the child can practice it on its own in a syllable
-/// ("pah"), checked by the camera and the lip model. After a miss the coach
-/// says the model's tip and demonstrates, as many times as it takes; then
-/// it's back to the whole word.
+/// 1. Word: picture + word, no coach. Azure scores it. Right: done. Wrong: the stages
+///    appear and Azure's phoneme scores pick the trouble sound.
+/// 2. Sound: "Can you say oo in boot?", the sound's letters highlighted in the word. No
+///    coach; the camera and lip model check it.
+/// 3. Coach: only after a miss in 2. The coach says the lip model's tip and shows the
+///    sound, as many times as it takes.
+/// 4. Sounds: the word one sound at a time ("buh", "oo", "tuh"), the coach first, then
+///    the child. Only the first time a word is practiced; after that it's the word, then
+///    just the trouble sound.
+/// 5. Again: the whole word, no coach. Azure's score next to stage 1's; a miss keeps the
+///    word for next time.
 class WordPracticeScreen extends StatefulWidget {
   const WordPracticeScreen({super.key, this.word, required this.source});
 
@@ -55,28 +59,32 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   VoidCallback? _coachPending; // runs once the coach has loaded
 
   late WordItem _word;
-  _Step _step = _Step.hear;
-  final List<AttemptResult> _attempts = [];
-  PAResult? _lastScore;
+  _Stage _stage = _Stage.word;
+  final List<FeedbackKind> _stars = []; // one per stage, once the stages are showing
   bool _listening = false;
   bool _scoring = false;
-  bool _slowMotion = false;
   bool _cameraOn = false;
   bool _cameraFailed = false;
-  String? _focusPhoneme;
   int _celebrations = 0;
 
-  String? _weakest; // the weakest sound in the last missed word
+  // stages 1 and 5, scored by Azure
+  PAResult? _firstScore;
+  PAResult? _finalScore;
 
-  // Sound practice: the weakest sound, said with the word's own vowel ("pah").
-  PhonemeAssessment? _practice; // offered after a missed word
-  PhonemeAssessment? _target; // being practiced now
+  // stages 2-4: the trouble sound, said with the word's own vowel ("pah")
+  PhonemeAssessment? _target;
+  int _targetIndex = 0;
   SoundPrompt? _prompt;
+  bool _lipModel = false; // the camera can check it
   List<String> _tips = const [];
-  bool _demo = false; // the coach has started demonstrating
   LipCheck? _lastCheck;
-  String? _soundNote; // e.g. no face seen
-  String? _soundWon; // the sound just passed, until the next word try
+  String? _note; // e.g. no face seen
+  bool _soundDone = false;
+
+  // stage 4
+  List<Chunk> _sounds = const [];
+  int _soundIndex = 0;
+  bool _built = false;
 
   @override
   void initState() {
@@ -86,6 +94,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     _word =
         queue.items.where((w) => w.text == text).firstOrNull ??
         DemoSeed.word(text, widget.source, DateTime.now());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startCamera());
   }
 
   @override
@@ -94,32 +103,29 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     super.dispose();
   }
 
-  bool get _outOfTries => _attempts.length >= _maxAttempts;
+  /// Once stage 1 is missed, the stages show and the child works through them.
+  bool get _practicing => _stage != _Stage.word;
 
-  /// The coach only demonstrates once the child has tried on their own and missed.
-  bool get _missed => _attempts.any((a) => a.kind != FeedbackKind.success);
+  List<PhonemeAssessment> get _scored => [
+        for (final w in _firstScore?.words ?? const <WordAssessment>[]) ...w.phonemes,
+      ];
 
-  /// Azure's sounds once the word has been tried, otherwise the word's own.
+  /// Azure's sounds once the word has been said, otherwise the word's own.
   List<String> get _phonemes {
-    final heard = [
-      for (final p in _attempts.lastOrNull?.phonemeResults ?? const <PhonemeResult>[])
-        p.phoneme,
-    ];
+    final heard = [for (final p in _scored) p.phoneme];
     return heard.isEmpty ? _word.phonemes : heard;
   }
 
-  void _goTo(_Step step) {
-    setState(() => _step = step);
-    if (step == _Step.watch) _coachShow();
-    if (step == _Step.tryIt) _startCamera();
-  }
-
   Future<void> _startCamera() async {
-    if (_cameraOn) return;
+    if (_cameraOn || !mounted) return;
     setState(() => _cameraOn = true);
     final ok = await _services.startCamera();
     if (mounted) setState(() => _cameraFailed = !ok);
   }
+
+  static FeedbackKind _kindFor(double accuracy) => accuracy >= _passScore
+      ? FeedbackKind.success
+      : (accuracy >= 60 ? FeedbackKind.almost : FeedbackKind.focus);
 
   // -------------------------
   // Coach
@@ -152,74 +158,61 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   /// Has the coach synthesize what it may say next, so it starts right away.
   void _prepareCoach() {
     final coach = _coachKey.currentState;
-    if (!_coachReady || coach == null) return;
-    coach.prepare(_word.text, tts: _slowMotion ? _slowTts : _wordTts);
     final prompt = _prompt;
-    if (prompt != null) {
-      coach.prepare(prompt.text, tts: {'ipa': prompt.ipa});
-      for (final tip in _tips) {
-        coach.prepare(tip, tts: _tipTts);
-      }
+    if (!_coachReady || coach == null || prompt == null) return;
+    coach.prepare(prompt.text, tts: {'ipa': prompt.ipa});
+    for (final tip in _tips) {
+      coach.prepare(tip, tts: _tipTts);
+    }
+    for (final s in breakDown(_word.text, _phonemes, target: _targetIndex)) {
+      coach.prepare(s.text, tts: {'ipa': s.ipa});
     }
   }
 
-  /// The coach says the word, or the sound being practiced or tapped.
-  void _coachShow() {
-    final sound = _target?.phoneme ?? _focusPhoneme;
-    if (sound == null) {
-      _withCoach((c) => c.say(_word.text, opts: {'tts': _slowMotion ? _slowTts : _wordTts}));
-      return;
+  /// What the coach shows right now: the trouble sound, or in stage 4 the current sound.
+  (String, Map<String, dynamic>) get _demo {
+    if (_stage == _Stage.build) {
+      final s = _sounds[_soundIndex];
+      return (s.text, _soundOpts(s.ipa, hold: s.hasTarget));
     }
-    final prompt = _promptFor(sound);
-    _withCoach((c) => c.say(prompt.text, opts: _soundOpts(sound, prompt)));
+    final prompt = _prompt!;
+    return (prompt.text, _soundOpts(prompt.ipa, hold: true));
   }
 
-  /// After a missed sound: the coach says the tip, then demonstrates.
-  void _coachTip(String tip) {
+  void _demonstrate() {
+    final (text, opts) = _demo;
+    _withCoach((c) => c.say(text, opts: opts));
+  }
+
+  /// The coach says [tip], then demonstrates, in one go.
+  void _coachSays(String tip) {
     final coach = _coachKey.currentState;
     if (!_coachReady || coach == null) {
       _services.speak(tip);
       return;
     }
-    final prompt = _prompt!;
-    coach.sayAll([
-      (tip, {'tts': _tipTts}),
-      (prompt.text, _soundOpts(_target!.phoneme, prompt)),
-    ]);
+    coach.sayAll([(tip, {'tts': _tipTts}), _demo]);
   }
 
-  SoundPrompt _promptFor(String sound) {
-    final prompt = _prompt;
-    if (prompt != null && sound == _target?.phoneme) return prompt;
-    final phonemes = _phonemes;
-    final i = phonemes.indexOf(sound);
-    return soundPromptFor(
-      sound,
-      before: i > 0 ? phonemes[i - 1] : null,
-      after: i >= 0 && i + 1 < phonemes.length ? phonemes[i + 1] : null,
-    );
-  }
-
-  /// The coach shows the mouth shape first, then says the sound, exaggerating
-  /// the movement less as the child gets closer.
-  Map<String, dynamic> _soundOpts(String sound, SoundPrompt prompt) {
+  /// The coach shows the trouble sound's mouth shape first ([hold]), then says it,
+  /// exaggerating the movement less as the child gets closer.
+  Map<String, dynamic> _soundOpts(String ipa, {required bool hold}) {
+    final sound = _target!.phoneme;
     final viseme = visemeFor(sound);
     final check = _lastCheck;
-    final accuracy = check != null ? check.score * 100 : (_target?.accuracyScore ?? 100);
+    final accuracy = check != null ? check.score * 100 : _target!.accuracyScore;
     final gains = boostFor(sound, boostGain(accuracy));
     return {
-      'tts': {'ipa': prompt.ipa},
-      if (viseme != null) 'holdViseme': viseme,
+      'tts': {'ipa': ipa},
+      if (hold && viseme != null) 'holdViseme': viseme,
       'holdMs': 500,
-      if (gains.isNotEmpty) 'boost': {'gains': gains, 'start': 0, 'end': 30},
+      if (hold && gains.isNotEmpty) 'boost': {'gains': gains, 'start': 0, 'end': 30},
     };
   }
 
   // -------------------------
-  // The word: scored by Azure
+  // Stages 1 and 5: the whole word, scored by Azure
   // -------------------------
-
-  Future<void> _toggleMic() => _target == null ? _toggleWordMic() : _toggleSoundMic();
 
   Future<void> _toggleWordMic() async {
     if (!_listening) {
@@ -235,7 +228,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     });
     try {
       final score = await _services.stopAndScore(_word.text);
-      if (mounted) _scoreWord(score);
+      if (!mounted) return;
+      _stage == _Stage.word ? _scoredFirst(score) : _scoredAgain(score);
     } catch (e) {
       debugPrint('assess error: $e');
       if (mounted) {
@@ -248,139 +242,215 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     }
   }
 
-  void _scoreWord(PAResult score) {
+  void _scoredFirst(PAResult score) {
     final passed = score.accuracyScore >= _passScore;
-    final worst = passed ? null : findWorstPhoneme(score);
-    // only sounds with a lip model can be checked on their own with the camera
-    final practice =
-        worst != null && PhonemeQualityModel.hasModelFor(worst.phoneme) ? worst : null;
-    final String coaching;
-    if (passed) {
-      coaching = 'You said "${_word.text}" clearly!';
-    } else if (practice != null) {
-      coaching = "Let's work on the /${practice.phoneme}/ sound.";
-    } else if (worst != null) {
-      coaching = azureFeedbackFor(worst);
-    } else {
-      coaching = "I couldn't hear that clearly. Let's try again.";
-    }
-
-    final result = AttemptResult(
-      wordId: _word.id,
-      kind: passed
-          ? FeedbackKind.success
-          : (score.accuracyScore >= 60 ? FeedbackKind.almost : FeedbackKind.focus),
-      phonemeResults: [
-        for (final w in score.words)
-          for (final p in w.phonemes)
-            PhonemeResult(p.phoneme, SoundLevel.fromScore(p.accuracyScore / 100).kind),
-      ],
-      coaching: coaching,
-      timestamp: DateTime.now(),
-    );
     setState(() {
-      _attempts.add(result);
-      _lastScore = score;
-      _weakest = worst?.phoneme;
-      _practice = practice;
-      _soundWon = null;
-      _step = _Step.feedback;
+      _firstScore = score;
       if (passed) _celebrations++;
     });
-    if (passed) AppHaptics.success();
-    _services.speak(coaching);
+    if (passed) {
+      AppHaptics.success();
+      _services.speak('You said ${_word.text}!');
+      return;
+    }
+    final worst = findWorstPhoneme(score);
+    if (worst == null) {
+      _services.speak("I couldn't hear that. Let's try again.");
+      return;
+    }
+    _startSound(worst);
   }
 
-  void _tryAgain() {
-    setState(() => _soundWon = null);
-    _goTo(_Step.tryIt);
-  }
-
-  /// After a miss with no lip check for the sound: the coach shows it.
-  void _watchWeakest() {
-    setState(() => _focusPhoneme = _weakest);
-    _goTo(_Step.watch);
-  }
+  void _retryFirst() => setState(() => _firstScore = null);
 
   // -------------------------
-  // One sound: checked by the camera and the lip model
+  // Stages 2 and 3: the trouble sound, checked by the camera and lip model
   // -------------------------
 
-  Future<void> _startSoundPractice() async {
-    final target = _practice!;
-    final around = neighbors(_lastScore!, target);
+  Future<void> _startSound(PhonemeAssessment target) async {
+    final around = neighbors(_firstScore!, target);
     final prompt = soundPromptFor(target.phoneme, before: around.before, after: around.after);
     setState(() {
+      _stage = _Stage.sound;
+      _stars
+        ..clear()
+        ..add(_kindFor(_firstScore!.accuracyScore));
       _target = target;
+      _targetIndex = _scored.indexOf(target).clamp(0, _phonemes.length - 1);
       _prompt = prompt;
+      _lipModel = PhonemeQualityModel.hasModelFor(target.phoneme);
       _tips = const [];
-      _demo = false;
       _lastCheck = null;
-      _soundNote = null;
-      _focusPhoneme = target.phoneme;
+      _note = null;
+      _soundDone = false;
     });
-    _goTo(_Step.tryIt);
-    _services.speak("Let's practice the /${target.phoneme}/ sound. Say /${prompt.ipa}/.");
-    try {
-      _tips = await _services.loadLipModel(target.phoneme);
-      _prepareCoach();
-    } catch (e) {
-      debugPrint('lip model error: $e');
+    _services.speak("Let's practice this a bit more! Can you say /${prompt.ipa}/ in ${_word.text}?");
+    if (_lipModel) {
+      try {
+        _tips = await _services.loadLipModel(target.phoneme);
+      } catch (e) {
+        debugPrint('lip model error: $e');
+      }
     }
+    _prepareCoach();
   }
+
+  /// Whether this try is checked by the camera: the trouble sound has a lip model and is
+  /// the part being said.
+  bool get _checksLips => _lipModel && (_stage != _Stage.build || _sounds[_soundIndex].hasTarget);
 
   Future<void> _toggleSoundMic() async {
     if (!_listening) {
       await _services.stopSpeaking();
-      await _services.startLipCapture();
+      if (_checksLips) await _services.startLipCapture();
       if (mounted) {
         setState(() {
           _listening = true;
-          _soundNote = null;
+          _note = null;
         });
       }
       return;
     }
     setState(() => _listening = false);
+    if (!_checksLips) {
+      _tried(passed: true, checked: false);
+      return;
+    }
     final check = await _services.stopLipCapture();
     if (!mounted) return;
     if (check == null) {
       const note = "I couldn't see your mouth. Keep your face in the camera and try again.";
-      setState(() => _soundNote = note);
+      setState(() => _note = note);
       _services.speak(note);
       return;
     }
     setState(() => _lastCheck = check);
-    if (check.passed) {
-      _soundPassed();
-      return;
+    _tried(passed: check.passed, checked: true);
+  }
+
+  void _tried({required bool passed, required bool checked}) {
+    switch (_stage) {
+      case _Stage.sound:
+        if (passed && checked) {
+          _soundPassed();
+        } else {
+          // a miss, or a sound the camera can't check: the coach shows it
+          setState(() {
+            _stage = _Stage.coach;
+            _stars.add(FeedbackKind.almost);
+          });
+          _coachSays(checked
+              ? _lastCheck!.tip
+              : (isTongueSound(_target!.phoneme)
+                  ? 'This sound is made with your tongue. Watch me closely.'
+                  : 'Watch me closely.'));
+        }
+      case _Stage.coach:
+        passed ? _soundPassed() : _coachSays(_lastCheck!.tip);
+      case _Stage.build:
+        passed ? _nextSound() : _coachSays(_lastCheck!.tip);
+      case _Stage.word:
+      case _Stage.check:
+        break;
     }
-    setState(() => _demo = true);
-    _coachTip(check.tip);
   }
 
   void _soundPassed() {
-    final sound = _target!.phoneme;
     setState(() {
-      _target = null;
-      _prompt = null;
-      _practice = null;
-      _demo = false;
-      _lastCheck = null;
-      _focusPhoneme = null;
-      _soundWon = sound;
+      // right in stage 2 straight away: stage 3 isn't needed
+      if (_stage == _Stage.sound) _stars.add(FeedbackKind.success);
+      _stars.add(FeedbackKind.success);
+      _soundDone = true;
       _celebrations++;
     });
     AppHaptics.success();
-    _services.speak(_outOfTries
-        ? 'You got the /$sound/ sound!'
-        : 'You got the /$sound/ sound! Now say the whole word, ${_word.text}.');
+    _services.speak("You got it! Let's put it all together now.");
   }
 
-  void _nextWord() {
+  /// Demo: show stage 3 even though stage 2 was right.
+  void _coachAnyway() {
+    setState(() {
+      _stage = _Stage.coach;
+      _stars.removeLast();
+      _soundDone = false;
+    });
+    _coachSays('Watch how I make it.');
+  }
+
+  // -------------------------
+  // Stage 4: one sound at a time
+  // -------------------------
+
+  bool get _builtBefore => context.read<AppState>().hasBuiltUp(_word.text);
+
+  void _startBuild() {
+    setState(() {
+      _stage = _Stage.build;
+      _sounds = breakDown(_word.text, _phonemes, target: _targetIndex);
+      _soundIndex = 0;
+      _built = false;
+      _lastCheck = null;
+      _note = null;
+    });
+    _coachSays("Let's put it all together. Say each sound after me.");
+  }
+
+  void _nextSound() {
+    if (_soundIndex + 1 < _sounds.length) {
+      setState(() {
+        _soundIndex++;
+        _lastCheck = null;
+      });
+      _demonstrate();
+      return;
+    }
+    context.read<AppState>().markBuiltUp(_word.text);
+    setState(() {
+      _built = true;
+      _stars.add(FeedbackKind.success);
+      _celebrations++;
+    });
+    AppHaptics.success();
+    _services.speak("Now let's say the whole word!");
+  }
+
+  // -------------------------
+  // Stage 5: the whole word again
+  // -------------------------
+
+  void _startAgain({bool skippedBuild = false}) {
+    setState(() {
+      _stage = _Stage.check;
+      // seen this word before: no need to break it down again
+      if (skippedBuild) _stars.add(FeedbackKind.success);
+    });
+    _services.speak('Now say ${_word.text}, all by yourself.');
+  }
+
+  void _scoredAgain(PAResult score) {
+    final passed = score.accuracyScore >= _passScore;
+    setState(() {
+      _finalScore = score;
+      _stars.add(passed ? FeedbackKind.success : FeedbackKind.focus);
+      if (passed) _celebrations++;
+    });
+    if (passed) AppHaptics.success();
+    _services.speak(passed
+        ? 'You did it! You said ${_word.text}!'
+        : "Good work. We'll practice ${_word.text} again next time.");
+  }
+
+  void _retryAgain() => setState(() {
+        _finalScore = null;
+        _stars.removeLast();
+      });
+
+  /// On to the next queued word. [later] keeps this one in the queue, at the back.
+  void _nextWord({bool later = false}) {
     final queue = context.read<PracticeQueue>();
     if (queue.contains(_word.text)) queue.remove(_word.id);
-    final next = queue.peek();
+    if (later) queue.addAll([_word]);
+    final next = queue.items.where((w) => w.text != _word.text).firstOrNull;
     if (next == null) {
       context.pop();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -411,47 +481,48 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
             ),
           ),
         ),
-        AttemptDots(
-          total: _maxAttempts,
-          results: [for (final a in _attempts) a.kind],
-        ),
+        if (_practicing) AttemptDots(total: _stageLabels.length, results: _stars),
       ],
     );
+
+    // the letters to highlight: the trouble sound, or in stage 4 the sound being said
+    final (int, int)? highlight = switch (_stage) {
+      _Stage.sound || _Stage.coach => lettersFor(_word.text, _phonemes.length, _targetIndex),
+      _Stage.build => _built ? null : (_sounds[_soundIndex].start, _sounds[_soundIndex].end),
+      _Stage.word || _Stage.check => null,
+    };
 
     final coach = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(_word.text, style: AppText.wordHero, textAlign: TextAlign.center),
-        const SizedBox(height: AppSpace.s),
-        _SoundRow(
-          phonemes: _phonemes,
-          focus: _focusPhoneme,
-          results: _step == _Step.feedback && _attempts.isNotEmpty
-              ? _attempts.last.phonemeResults
-              : null,
-          onTap: (p) {
-            setState(() => _focusPhoneme = _focusPhoneme == p ? null : p);
-            if (_step == _Step.watch) _coachShow();
-          },
-        ),
+        // the picture goes with the whole word (stages 1 and 5); while working on the sound
+        // the highlighted letters are enough, and the mic stays on screen
+        if (_stage == _Stage.word || _stage == _Stage.check) ...[
+          Center(child: WordPicture(word: _word.text, size: 120)),
+          const SizedBox(height: AppSpace.s),
+        ],
+        _HighlightedWord(word: _word.text, highlight: highlight),
+        if (_firstScore != null) ...[
+          const SizedBox(height: AppSpace.s),
+          _SoundRow(
+            phonemes: _phonemes,
+            focus: _practicing ? _targetIndex : null,
+            results: [
+              for (final p in _scored)
+                PhonemeResult(p.phoneme, SoundLevel.fromScore(p.accuracyScore / 100).kind),
+            ],
+          ),
+        ],
         const SizedBox(height: AppSpace.l),
-        StepperBar(
-          steps: _stepLabels,
-          current: _step.index,
-          locked: {if (!_missed) _Step.watch.index},
-          onStepTap: (i) {
-            // feedback only makes sense once there's an attempt
-            if (i == _Step.feedback.index && _attempts.isEmpty) return;
-            _goTo(_Step.values[i]);
-          },
-        ),
-        const SizedBox(height: AppSpace.l),
-        AnimatedSwitcher(duration: AppMotion.medium, child: _stepBody()),
+        AnimatedSwitcher(duration: AppMotion.medium, child: _stageCard()),
       ],
     );
 
     final stage = _AvatarStage(
       coach: _coachView(),
+      // the coach only shows in stages 3 and 4; otherwise the porthole has the beluga,
+      // with the coach loaded behind it
+      coachShown: _stage == _Stage.coach || (_stage == _Stage.build && !_built),
       camera: _cameraOn ? _cameraView() : null,
       vertical: wide,
     );
@@ -465,6 +536,26 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
         ),
         title: const Text('Word Practice'),
       ),
+      // the stages, along the bottom once the word has been missed
+      bottomNavigationBar: _practicing
+          ? DecoratedBox(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.lakeDeep, width: 2.5)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.s, AppSpace.page, AppSpace.s),
+                  // only as tall as the steps (the bar would otherwise stretch to fill)
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [StepperBar(steps: _stageLabels, current: _stage.index)],
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: Stack(
         children: [
           SafeArea(
@@ -551,205 +642,341 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     );
   }
 
-  Widget _stepBody() {
-    switch (_step) {
-      case _Step.hear:
-        return _StepCard(
-          key: const ValueKey(_Step.hear),
-          instruction: 'Listen to how "${_word.text}" sounds.',
-          children: [
-            PrimaryButton(
-              label: 'Play the word',
-              icon: Icons.volume_up_rounded,
-              expand: true,
-              onPressed: () => _services.speak(_word.text),
-            ),
-            const SizedBox(height: AppSpace.s),
-            SecondaryButton(
-              label: 'Next: Try',
-              expand: true,
-              onPressed: () => _goTo(_Step.tryIt),
-            ),
-          ],
-        );
-      case _Step.watch:
-        return _StepCard(
-          key: const ValueKey(_Step.watch),
-          instruction: _focusPhoneme == null
-              ? "Watch your coach's mouth. Tap a sound above to focus on it."
-              : 'Watch how your coach makes /$_focusPhoneme/.',
-          children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Slow motion', style: AppText.bodyStrong),
-              value: _slowMotion,
-              onChanged: (v) {
-                setState(() => _slowMotion = v);
-                _coachShow();
-              },
-            ),
-            const SizedBox(height: AppSpace.s),
-            SecondaryButton(
-              label: 'Watch again',
-              icon: Icons.replay_rounded,
-              expand: true,
-              onPressed: _coachShow,
-            ),
-            const SizedBox(height: AppSpace.m),
-            Row(
-              children: [
-                Flexible(
-                  child: Text('Tongue guidance', style: AppText.bodyStrong),
-                ),
-                const SizedBox(width: AppSpace.s),
-                const TagBadge(label: 'Guidance'),
-              ],
-            ),
-            const SizedBox(height: AppSpace.s),
-            const ComingSoon(
-              label: 'Tongue position schematic',
-              icon: Icons.schema_rounded,
-              height: 140,
-              detail: 'A drawing to guide you, not a measurement.',
-            ),
-            const SizedBox(height: AppSpace.m),
-            SecondaryButton(
-              label: 'Next: Try',
-              expand: true,
-              onPressed: () => _goTo(_Step.tryIt),
-            ),
-          ],
-        );
-      case _Step.tryIt:
-        return _target == null ? _tryWord() : _trySound();
-      case _Step.feedback:
-        final last = _attempts.last;
-        final practice = _practice;
-        return _StepCard(
-          key: ValueKey('feedback-${_attempts.length}'),
-          children: [
-            FeedbackBanner(kind: last.kind, message: last.coaching),
-            const SizedBox(height: AppSpace.l),
-            if (last.kind == FeedbackKind.success || (_outOfTries && practice == null))
-              PrimaryButton(
-                label: 'Next word',
-                icon: Icons.arrow_forward_rounded,
-                expand: true,
-                onPressed: _nextWord,
-              )
-            else ...[
-              if (practice != null)
-                PrimaryButton(
-                  label: 'Practice the /${practice.phoneme}/ sound',
-                  icon: Icons.record_voice_over_rounded,
-                  expand: true,
-                  onPressed: _startSoundPractice,
-                )
-              else
-                PrimaryButton(
-                  label: 'Watch the coach',
-                  icon: Icons.face_retouching_natural_rounded,
-                  expand: true,
-                  onPressed: _watchWeakest,
-                ),
-              const SizedBox(height: AppSpace.s),
-              if (!_outOfTries) ...[
-                SecondaryButton(
-                  label: 'Try the word again',
-                  expand: true,
-                  onPressed: _tryAgain,
-                ),
-                const SizedBox(height: AppSpace.s),
-              ],
-              SecondaryButton(
-                label: 'Next word',
-                expand: true,
-                onPressed: _nextWord,
-              ),
-            ],
-          ],
-        );
-    }
-  }
+  Widget _stageCard() => switch (_stage) {
+        _Stage.word => _wordCard(),
+        _Stage.sound || _Stage.coach => _soundCard(),
+        _Stage.build => _buildCard(),
+        _Stage.check => _againCard(),
+      };
 
-  Widget _tryWord() {
-    final won = _soundWon;
-    return _StepCard(
-      key: const ValueKey('try-word'),
-      instruction: _scoring
-          ? 'Checking…'
-          : _listening
-              ? 'Listening… tap again when you\'re done.'
-              : (_outOfTries ? null : 'Tap the mic and say "${_word.text}".'),
-      children: [
-        if (won != null) ...[
-          FeedbackBanner(
-            kind: FeedbackKind.success,
-            message: _outOfTries
-                ? 'You got the /$won/ sound!'
-                : 'You got the /$won/ sound! Now say the whole word.',
+  Widget _mic(VoidCallback onPressed) => Center(
+        child: MicButton(listening: _listening, onPressed: _scoring ? null : onPressed),
+      );
+
+  String? _listeningText({String? idle}) => _scoring
+      ? 'Checking…'
+      : (_listening ? 'Listening… tap again when you\'re done.' : idle);
+
+  Widget _wordCard() {
+    final score = _firstScore;
+    if (score == null) {
+      return _StepCard(
+        key: const ValueKey('word'),
+        instruction: _listeningText(idle: 'Tap the mic and say "${_word.text}".'),
+        children: [
+          _mic(_toggleWordMic),
+          const SizedBox(height: AppSpace.m),
+          SecondaryButton(
+            label: 'Hear it',
+            icon: Icons.volume_up_rounded,
+            expand: true,
+            onPressed: _listening ? null : () => _services.speak(_word.text),
           ),
-          const SizedBox(height: AppSpace.l),
         ],
-        if (_outOfTries)
+      );
+    }
+    final passed = score.accuracyScore >= _passScore;
+    final weakest = findWorstPhoneme(score);
+    return _StepCard(
+      key: const ValueKey('word-done'),
+      children: [
+        FeedbackBanner(
+          kind: passed ? FeedbackKind.success : FeedbackKind.focus,
+          message: passed ? 'You said "${_word.text}"!' : "I couldn't hear that clearly.",
+        ),
+        const SizedBox(height: AppSpace.l),
+        if (passed) ...[
           PrimaryButton(
             label: 'Next word',
             icon: Icons.arrow_forward_rounded,
             expand: true,
             onPressed: _nextWord,
-          )
-        else
-          Center(
-            child: MicButton(listening: _listening, onPressed: _scoring ? null : _toggleMic),
+          ),
+          if (weakest != null)
+            // demo: walk through the stages even when the word was right
+            TextButton(
+              onPressed: () => _startSound(weakest),
+              child: const Text('Practice it anyway'),
+            ),
+        ] else
+          PrimaryButton(
+            label: 'Try again',
+            icon: Icons.replay_rounded,
+            expand: true,
+            onPressed: _retryFirst,
           ),
       ],
     );
   }
 
-  Widget _trySound() {
+  Widget _soundCard() {
     final prompt = _prompt!;
     final check = _lastCheck;
-    final note = _soundNote;
-    return _StepCard(
-      key: const ValueKey('try-sound'),
-      instruction: _listening
-          ? 'Watching… tap again when you\'re done.'
-          : _demo
-              ? 'Watch your coach, then say "${prompt.text}".'
-              : 'Tap the mic and say "${prompt.text}".',
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TagBadge(label: 'Sound practice: /${_target!.phoneme}/'),
-        ),
-        const SizedBox(height: AppSpace.m),
-        if (note != null) ...[
-          FeedbackBanner(kind: FeedbackKind.focus, message: note),
+    final note = _note;
+    final coachStage = _stage == _Stage.coach;
+    if (_soundDone) {
+      final builtBefore = _builtBefore;
+      return _StepCard(
+        key: const ValueKey('sound-done'),
+        children: [
+          const FeedbackBanner(
+            kind: FeedbackKind.success,
+            message: "You got it! Let's put it all together now.",
+          ),
           const SizedBox(height: AppSpace.l),
-        ] else if (check != null) ...[
-          FeedbackBanner(kind: FeedbackKind.almost, message: check.tip),
-          const SizedBox(height: AppSpace.l),
+          PrimaryButton(
+            label: builtBefore ? 'Say the whole word' : 'Put it together',
+            icon: Icons.arrow_forward_rounded,
+            expand: true,
+            onPressed: builtBefore ? () => _startAgain(skippedBuild: true) : _startBuild,
+          ),
+          if (!coachStage)
+            TextButton(onPressed: _coachAnyway, child: const Text('Watch the coach anyway')),
         ],
-        Center(child: MicButton(listening: _listening, onPressed: _toggleMic)),
-        if (_demo) ...[
+      );
+    }
+    return _StepCard(
+      key: ValueKey(_stage),
+      instruction: _listeningText(
+        idle: coachStage ? 'Watch your coach, then say "${prompt.text}".' : null,
+      ),
+      children: [
+        if (note != null)
+          FeedbackBanner(kind: FeedbackKind.focus, message: note)
+        else if (check != null)
+          FeedbackBanner(kind: FeedbackKind.almost, message: check.tip)
+        else if (!coachStage)
+          FeedbackBanner(
+            kind: FeedbackKind.almost,
+            message: "Let's practice this a bit more! Can you say \"${prompt.text}\" in ${_word.text}?",
+          ),
+        if (!_lipModel) ...[
+          const SizedBox(height: AppSpace.s),
+          Text("This sound is made with your tongue, so the camera can't check it yet.",
+              style: AppText.caption),
+        ],
+        const SizedBox(height: AppSpace.l),
+        _mic(_toggleSoundMic),
+        if (coachStage) ...[
           const SizedBox(height: AppSpace.l),
           SecondaryButton(
             label: 'Watch again',
             icon: Icons.replay_rounded,
             expand: true,
-            onPressed: _listening ? null : _coachShow,
+            onPressed: _listening ? null : _demonstrate,
           ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCard() {
+    if (_built) {
+      return _StepCard(
+        key: const ValueKey('built'),
+        children: [
+          const FeedbackBanner(kind: FeedbackKind.success, message: "Now let's say the whole word!"),
+          const SizedBox(height: AppSpace.l),
+          PrimaryButton(
+            label: 'Say the whole word',
+            icon: Icons.arrow_forward_rounded,
+            expand: true,
+            onPressed: _startAgain,
+          ),
+        ],
+      );
+    }
+    final sound = _sounds[_soundIndex];
+    final check = _lastCheck;
+    final note = _note;
+    return _StepCard(
+      key: ValueKey('build-$_soundIndex'),
+      instruction: _listeningText(idle: 'Listen to your coach, then say "${sound.text}".'),
+      children: [
+        _SoundSteps(sounds: _sounds, current: _soundIndex),
+        if (note != null) ...[
+          const SizedBox(height: AppSpace.m),
+          FeedbackBanner(kind: FeedbackKind.focus, message: note),
+        ] else if (check != null && !check.passed) ...[
+          const SizedBox(height: AppSpace.m),
+          FeedbackBanner(kind: FeedbackKind.almost, message: check.tip),
+        ],
+        const SizedBox(height: AppSpace.l),
+        _mic(_toggleSoundMic),
+        const SizedBox(height: AppSpace.l),
+        SecondaryButton(
+          label: 'Hear it again',
+          icon: Icons.replay_rounded,
+          expand: true,
+          onPressed: _listening ? null : _demonstrate,
+        ),
+      ],
+    );
+  }
+
+  Widget _againCard() {
+    final score = _finalScore;
+    if (score == null) {
+      return _StepCard(
+        key: const ValueKey('again'),
+        instruction: _listeningText(idle: 'Now say "${_word.text}", all by yourself.'),
+        children: [_mic(_toggleWordMic)],
+      );
+    }
+    final passed = score.accuracyScore >= _passScore;
+    return _StepCard(
+      key: const ValueKey('again-done'),
+      children: [
+        FeedbackBanner(
+          kind: passed ? FeedbackKind.success : FeedbackKind.focus,
+          message: passed
+              ? 'You said "${_word.text}"!'
+              : 'Good work! We\'ll practice "${_word.text}" again next time.',
+        ),
+        if (_firstScore case final first?) ...[
+          const SizedBox(height: AppSpace.m),
+          _ScoreCompare(first: first.accuracyScore, last: score.accuracyScore),
+        ],
+        const SizedBox(height: AppSpace.l),
+        PrimaryButton(
+          label: 'Next word',
+          icon: Icons.arrow_forward_rounded,
+          expand: true,
+          onPressed: () => _nextWord(later: !passed),
+        ),
+        if (!passed) ...[
+          const SizedBox(height: AppSpace.s),
+          SecondaryButton(label: 'Try again', expand: true, onPressed: _retryAgain),
         ],
       ],
     );
   }
 }
 
-/// The coach, with the child's camera beside it while they try.
+/// The word, with the letters of one sound picked out in lotus pink.
+class _HighlightedWord extends StatelessWidget {
+  const _HighlightedWord({required this.word, this.highlight});
+
+  final String word;
+  final (int, int)? highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = highlight;
+    if (h == null) return Text(word, style: AppText.wordHero, textAlign: TextAlign.center);
+    final (start, end) = h;
+    return Text.rich(
+      TextSpan(children: [
+        TextSpan(text: word.substring(0, start)),
+        TextSpan(
+          text: word.substring(start, end),
+          style: const TextStyle(
+            color: AppColors.lotus,
+            decoration: TextDecoration.underline,
+            decorationColor: AppColors.lotus,
+            decorationThickness: 3,
+          ),
+        ),
+        TextSpan(text: word.substring(end)),
+      ]),
+      style: AppText.wordHero,
+      textAlign: TextAlign.center,
+    );
+  }
+}
+
+/// Stage 4's sounds in order: done ones checked, the current one highlighted.
+class _SoundSteps extends StatelessWidget {
+  const _SoundSteps({required this.sounds, required this.current});
+
+  final List<Chunk> sounds;
+  final int current;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: AppSpace.s,
+      runSpacing: AppSpace.s,
+      children: [
+        for (var i = 0; i < sounds.length; i++)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.m, vertical: AppSpace.s),
+            decoration: BoxDecoration(
+              color: i < current
+                  ? AppColors.successSoft
+                  : (i == current ? AppColors.lotusBlush : AppColors.surface),
+              borderRadius: AppRadius.pillRadius,
+              border: Border.all(
+                color: i == current ? AppColors.lotus : AppColors.line,
+                width: 2.5,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (i < current) ...[
+                  const Icon(Icons.check_rounded, size: 18, color: AppColors.success),
+                  const SizedBox(width: AppSpace.xs),
+                ],
+                Text(sounds[i].text,
+                    style: AppText.section.copyWith(
+                        color: i == current ? AppColors.lotusDeep : AppColors.ink)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Stage 1's Azure score next to stage 5's.
+class _ScoreCompare extends StatelessWidget {
+  const _ScoreCompare({required this.first, required this.last});
+
+  final double first;
+  final double last;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget score(String label, double value, Color color) => Column(
+          children: [
+            Text(value.toStringAsFixed(0), style: AppText.display.copyWith(color: color)),
+            Text(label, style: AppText.caption),
+          ],
+        );
+    return Semantics(
+      container: true,
+      label: 'First try ${first.round()}, now ${last.round()}',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          score('First try', first, AppColors.inkSoft),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpace.l),
+            child: Icon(Icons.arrow_forward_rounded, color: AppColors.lake, size: 32),
+          ),
+          score('Now', last, last >= first ? AppColors.success : AppColors.almost),
+        ],
+      ),
+    );
+  }
+}
+
+/// The coach, with the child's camera beside it.
 class _AvatarStage extends StatelessWidget {
-  const _AvatarStage({required this.coach, this.camera, this.vertical = false});
+  const _AvatarStage({
+    required this.coach,
+    required this.coachShown,
+    this.camera,
+    this.vertical = false,
+  });
 
   final Widget coach;
+
+  /// Otherwise the porthole shows the beluga, with the coach loaded behind it.
+  final bool coachShown;
   final Widget? camera;
 
   /// Stack the camera under the coach (the tall stage on wide screens).
@@ -758,6 +985,18 @@ class _AvatarStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final camera = this.camera;
+    final window = Stack(
+      children: [
+        Positioned.fill(child: coach),
+        if (!coachShown)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: AppColors.lakeMist,
+              child: FittedBox(child: BelugaBuddy(size: 160)),
+            ),
+          ),
+      ],
+    );
     return Container(
       // a pond, with the coach looking out of a porthole
       decoration: const BoxDecoration(
@@ -768,11 +1007,11 @@ class _AvatarStage extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(AppSpace.m),
       child: camera == null
-          ? Center(child: Porthole(child: coach))
+          ? Center(child: Porthole(child: window))
           : Flex(
               direction: vertical ? Axis.vertical : Axis.horizontal,
               children: [
-                Expanded(child: Center(child: Porthole(child: coach))),
+                Expanded(child: Center(child: Porthole(child: window))),
                 const SizedBox(width: AppSpace.s, height: AppSpace.s),
                 Expanded(child: camera),
               ],
@@ -781,28 +1020,16 @@ class _AvatarStage extends StatelessWidget {
   }
 }
 
+/// The word's sounds as bubbles, colored by stage 1's scores, the trouble one picked out.
 class _SoundRow extends StatelessWidget {
-  const _SoundRow({
-    required this.phonemes,
-    required this.focus,
-    required this.results,
-    required this.onTap,
-  });
+  const _SoundRow({required this.phonemes, required this.focus, required this.results});
 
   final List<String> phonemes;
-  final String? focus;
-  final List<PhonemeResult>? results;
-  final ValueChanged<String> onTap;
+  final int? focus;
+  final List<PhonemeResult> results;
 
   @override
   Widget build(BuildContext context) {
-    if (phonemes.isEmpty) {
-      return Text(
-        'Sounds for this word are coming soon.',
-        style: AppText.caption,
-        textAlign: TextAlign.center,
-      );
-    }
     return Wrap(
       alignment: WrapAlignment.center,
       spacing: AppSpace.s,
@@ -811,11 +1038,8 @@ class _SoundRow extends StatelessWidget {
         for (var i = 0; i < phonemes.length; i++)
           SoundChip(
             phoneme: phonemes[i],
-            kind: results != null && i < results!.length
-                ? results![i].kind
-                : null,
-            selected: focus == phonemes[i],
-            onTap: () => onTap(phonemes[i]),
+            kind: i < results.length ? results[i].kind : null,
+            selected: focus == i,
           ),
       ],
     );
