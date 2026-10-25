@@ -196,13 +196,28 @@ export class Avatar {
     });
   }
 
-  // Stage 4: continue after a pauseAt stop.
+  // Stage 4: continue after a pauseAt stop. iOS WebKit can resume a paused <audio> silently
+  // when play() comes from script (the face moves on, no sound), so carry on with a fresh
+  // element from the same spot. The face stays held until the new audio is ready.
   resume() {
     const a = this.anim;
     if (!a?.waiting) return;
     a.waiting = false;
-    a.holding = false;
-    a.el.play();
+    const old = a.el;
+    const at = old.currentTime;
+    const el = new Audio(old.src);
+    el.preload = 'auto';
+    el.onended = old.onended;
+    old.onended = null;
+    const start = () => {
+      el.currentTime = at;
+      a.el = el;
+      a.holding = false;
+      el.play().catch((e) => console.warn('resume play failed', e));
+    };
+    if (el.readyState >= 1) start();
+    else el.addEventListener('loadedmetadata', start, { once: true });
+    el.load();
   }
 
   stop() {

@@ -40,6 +40,7 @@ class _Stage4ScreenState extends State<Stage4Screen> {
   bool _useAvatar = _avatarConfigured;
   bool _avatarReady = false;
   double _threshold = 0.5;
+  double _windowSeconds = 0.75;
   String? _status;
   bool _loadingSteps = false;
 
@@ -120,6 +121,7 @@ class _Stage4ScreenState extends State<Stage4Screen> {
         steps: steps,
         useAvatar: _useAvatar,
         threshold: _threshold,
+        window: Duration(milliseconds: (_windowSeconds * 1000).round()),
       )..addListener(() => setState(() {}));
       _session?.dispose();
       setState(() => _session = session);
@@ -252,10 +254,23 @@ class _Stage4ScreenState extends State<Stage4Screen> {
             session?.threshold = v;
           }),
         ),
+        Text('Window: last ${_windowSeconds.toStringAsFixed(2)} s', style: AppText.caption,
+            textAlign: TextAlign.center),
+        Slider(
+          value: _windowSeconds,
+          min: 0.5,
+          max: 1.5,
+          divisions: 8,
+          label: '${_windowSeconds.toStringAsFixed(2)} s',
+          onChanged: (v) => setState(() {
+            _windowSeconds = v;
+            session?.window = Duration(milliseconds: (v * 1000).round());
+          }),
+        ),
         if (_matcher == null)
           const Center(child: CircularProgressIndicator())
         else if (step != null && session != null) ...[
-          Text('You (last 1.5 s)', style: AppText.caption),
+          Text('You (last ${_windowSeconds.toStringAsFixed(2)} s)', style: AppText.caption),
           const SizedBox(height: AppSpace.xs),
           TrajectoryChart(series: session.windowFeatures),
           const SizedBox(height: AppSpace.s),

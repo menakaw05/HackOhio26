@@ -48,7 +48,7 @@ class MatcherConfig {
   const MatcherConfig({
     this.smoothWindow = 5,
     this.velocityWeight = 1.0,
-    this.trimFraction = 0.15,
+    this.trimFraction = 0.95,
     this.sigmaPercentile = 0.9,
     this.minMotionRatio = 0.3,
   });
@@ -59,7 +59,9 @@ class MatcherConfig {
   /// How much movement (velocity) counts relative to mouth shape.
   final double velocityWeight;
 
-  /// Golden frames under this share of the take's peak movement count as still and are trimmed.
+  /// Golden frames under this share of the take's peak movement are trimmed, leaving the core of
+  /// the sound. High (0.95, about a third of a second) because in a word the mouth goes from one
+  /// sound to the next without relaxing in between, unlike the isolated golden takes.
   final double trimFraction;
 
   /// σ is the distance at this percentile of your own leave-one-out takes, so a score of 0.5
@@ -87,6 +89,9 @@ class MouthMatcher {
   Iterable<String> get phonemes => _templates.keys;
   bool hasPhoneme(String ipa) => _templates.containsKey(ipa);
   double? sigmaFor(String ipa) => _sigma[ipa];
+
+  /// Frames in each trimmed template of [ipa] (the movement that gets matched).
+  List<int> templateLengths(String ipa) => [for (final t in _templates[ipa] ?? const []) t.seq.length];
 
   /// Builds templates and per-sound σ from golden takes (phoneme → takes, each frames × features).
   factory MouthMatcher.fromTakes(Map<String, List<List<List<double>>>> takes,

@@ -49,7 +49,7 @@ class FollowAlongSession extends ChangeNotifier {
     required this.steps,
     required this.useAvatar,
     this.threshold = 0.5,
-    this.window = const Duration(milliseconds: 1500),
+    this.window = const Duration(milliseconds: 750),
     this.hold = const Duration(milliseconds: 300),
   });
 
@@ -61,7 +61,7 @@ class FollowAlongSession extends ChangeNotifier {
   double threshold;
 
   /// How much recent movement is scored.
-  final Duration window;
+  Duration window;
 
   /// How long the score must stay above the threshold to pass.
   final Duration hold;
