@@ -80,57 +80,62 @@ void main() {
     createPracticeServices = () => services;
     await pumpAt(tester, Routes.wordPractice('boot'));
     expect(tester.takeException(), isNull);
-    expect(find.text('boot'), findsOneWidget);
-    expect(find.text('Your avatar coach'), findsOneWidget);
+    expect(find.text('boot', skipOffstage: false), findsOneWidget);
+    expect(find.text('Your avatar coach', skipOffstage: false), findsOneWidget);
     // stage 1 is just the word: no stages yet
     expect(find.byType(StepperBar), findsNothing);
-    expect(find.text('Tap the mic and say "boot".'), findsOneWidget);
+    expect(find.text('Tap the mic and say "boot".', skipOffstage: false), findsOneWidget);
 
+    // the stage bar sits along the bottom, so scroll things up from under it first
     Future<void> tapText(String text) async {
-      await tester.ensureVisible(find.text(text));
+      await tester.ensureVisible(find.text(text, skipOffstage: false));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(text));
+      await tester.tap(find.text(text, skipOffstage: false));
       await tester.pumpAndSettle();
     }
 
-    Future<void> sayIt() async {
-      final mic = find.byType(MicButton);
+    Future<void> tapMic() async {
+      final mic = find.byType(MicButton, skipOffstage: false);
       await tester.ensureVisible(mic);
       await tester.pumpAndSettle();
       await tester.tap(mic);
       await tester.pumpAndSettle();
-      await tester.tap(mic);
-      await tester.pumpAndSettle();
+    }
+
+    Future<void> sayIt() async {
+      await tapMic();
+      await tapMic();
     }
 
     await sayIt();
     // missed: the stages show, and it's on to the trouble sound
     expect(find.byType(StepperBar), findsOneWidget);
-    expect(find.text('Let\'s practice this a bit more! Can you say "oo" in boot?'), findsOneWidget);
+    expect(find.text('Let\'s practice this a bit more! Can you say "oo" in boot?', skipOffstage: false),
+        findsOneWidget);
     expect(services.lipModel, 'u');
 
     await sayIt();
     // stage 2 missed: the coach says the lip model's tip and shows it
-    expect(find.text('Try rounding your lips more.'), findsOneWidget);
-    expect(find.text('Watch your coach, then say "oo".'), findsOneWidget);
+    expect(find.text('Try rounding your lips more.', skipOffstage: false), findsOneWidget);
+    expect(find.text('Watch your coach, then say "oo".', skipOffstage: false), findsOneWidget);
     await sayIt();
-    expect(find.text("You got it! Let's put it all together now."), findsOneWidget);
+    expect(find.text("You got it! Let's put it all together now.", skipOffstage: false), findsOneWidget);
 
     // stage 4: one sound at a time
     await tapText('Put it together');
-    expect(find.text('Listen to your coach, then say "buh".'), findsOneWidget);
+    expect(find.text('Listen to your coach, then say "buh".', skipOffstage: false), findsOneWidget);
     await sayIt();
-    expect(find.text('Listen to your coach, then say "oo".'), findsOneWidget);
+    expect(find.text('Listen to your coach, then say "oo".', skipOffstage: false), findsOneWidget);
     await sayIt();
-    expect(find.text('Listen to your coach, then say "tuh".'), findsOneWidget);
+    expect(find.text('Listen to your coach, then say "tuh".', skipOffstage: false), findsOneWidget);
     await sayIt();
-    expect(find.text("Now let's say the whole word!"), findsOneWidget);
+    expect(find.text("Now let's say the whole word!", skipOffstage: false), findsOneWidget);
 
     // stage 5: the whole word again, with the first score beside it
     await tapText('Say the whole word');
     await sayIt();
-    expect(find.text('Great!'), findsOneWidget);
-    expect(find.text('You said "boot"!'), findsOneWidget);
+    expect(find.text('Great!', skipOffstage: false), findsOneWidget);
+    expect(find.text('You said "boot"!', skipOffstage: false), findsOneWidget);
     expect(find.bySemanticsLabel('First try 65, now 93'), findsOneWidget);
     final state = Provider.of<AppState>(tester.element(find.byType(Scaffold).first), listen: false);
     expect(state.hasBuiltUp('boot'), isTrue); // next time: no breaking it down

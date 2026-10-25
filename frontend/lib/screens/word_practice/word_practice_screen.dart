@@ -495,8 +495,12 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     final coach = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Center(child: WordPicture(word: _word.text, size: 120)),
-        const SizedBox(height: AppSpace.s),
+        // the picture goes with the whole word (stages 1 and 5); while working on the sound
+        // the highlighted letters are enough, and the mic stays on screen
+        if (_stage == _Stage.word || _stage == _Stage.check) ...[
+          Center(child: WordPicture(word: _word.text, size: 120)),
+          const SizedBox(height: AppSpace.s),
+        ],
         _HighlightedWord(word: _word.text, highlight: highlight),
         if (_firstScore != null) ...[
           const SizedBox(height: AppSpace.s),
@@ -508,10 +512,6 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
                 PhonemeResult(p.phoneme, SoundLevel.fromScore(p.accuracyScore / 100).kind),
             ],
           ),
-        ],
-        if (_practicing) ...[
-          const SizedBox(height: AppSpace.l),
-          StepperBar(steps: _stageLabels, current: _stage.index),
         ],
         const SizedBox(height: AppSpace.l),
         AnimatedSwitcher(duration: AppMotion.medium, child: _stageCard()),
@@ -536,6 +536,26 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
         ),
         title: const Text('Word Practice'),
       ),
+      // the stages, along the bottom once the word has been missed
+      bottomNavigationBar: _practicing
+          ? DecoratedBox(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.lakeDeep, width: 2.5)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.s, AppSpace.page, AppSpace.s),
+                  // only as tall as the steps (the bar would otherwise stretch to fill)
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [StepperBar(steps: _stageLabels, current: _stage.index)],
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: Stack(
         children: [
           SafeArea(
