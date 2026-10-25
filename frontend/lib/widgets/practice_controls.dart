@@ -107,11 +107,20 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
 
 /// Hear → Watch → Try → Feedback.
 class StepperBar extends StatelessWidget {
-  const StepperBar({super.key, required this.steps, required this.current, this.onStepTap});
+  const StepperBar({
+    super.key,
+    required this.steps,
+    required this.current,
+    this.onStepTap,
+    this.locked = const {},
+  });
 
   final List<String> steps;
   final int current;
   final ValueChanged<int>? onStepTap;
+
+  /// Steps that can't be opened yet; shown faded.
+  final Set<int> locked;
 
   @override
   Widget build(BuildContext context) {
@@ -120,12 +129,12 @@ class StepperBar extends StatelessWidget {
         for (var i = 0; i < steps.length; i++) ...[
           Expanded(
             child: Semantics(
-              button: onStepTap != null,
+              button: onStepTap != null && !locked.contains(i),
               selected: i == current,
-              label: 'Step ${i + 1}: ${steps[i]}',
+              label: 'Step ${i + 1}: ${steps[i]}${locked.contains(i) ? ', locked' : ''}',
               child: InkWell(
                 borderRadius: AppRadius.pillRadius,
-                onTap: onStepTap == null ? null : () => onStepTap!(i),
+                onTap: onStepTap == null || locked.contains(i) ? null : () => onStepTap!(i),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: AppSize.minTouch),
                   child: Column(
@@ -135,15 +144,20 @@ class StepperBar extends StatelessWidget {
                         duration: AppMotion.medium,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: i <= current ? AppColors.lake : AppColors.lakeMist,
+                          color: i <= current && !locked.contains(i)
+                              ? AppColors.lake
+                              : AppColors.lakeMist,
                           borderRadius: AppRadius.pillRadius,
                         ),
                       ),
                       const SizedBox(height: AppSpace.xs),
                       Text(
                         steps[i],
-                        style: (i == current ? AppText.bodyStrong : AppText.caption)
-                            .copyWith(color: i == current ? AppColors.lakeDeep : null),
+                        style: (i == current ? AppText.bodyStrong : AppText.caption).copyWith(
+                          color: i == current
+                              ? AppColors.lakeDeep
+                              : (locked.contains(i) ? AppColors.inkFaint : null),
+                        ),
                       ),
                     ],
                   ),
