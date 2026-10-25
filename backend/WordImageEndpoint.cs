@@ -1,5 +1,6 @@
 // GET /api/images/get?word=boot: a picture for a word, drawn by the Azure OpenAI image
-// deployment (gpt-image-1-mini) and kept in word-images/. A word that isn't drawn yet answers
+// deployment (gpt-image-1-mini) on a transparent background, trimmed and centered so every
+// picture sits the same way in the app, and kept in word-images/. A word that isn't drawn yet answers
 // 202 while it's drawn in the background (about 40 s), the same contract as eLEXir's image
 // service, so the app shows the word's emoji meanwhile and asks again.
 // Settings: ImageGen:Endpoint (the resource's address, or the deployment's whole Target URI),
@@ -14,6 +15,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 public static class WordImageEndpoint
 {
@@ -91,8 +95,11 @@ public static class WordImageEndpoint
         req.Headers.Add("api-key", key);
         var body = JsonSerializer.Serialize(new
         {
-            prompt = $"Simple, cartoon image of {word}, white background, no words, pastel colors",
+            prompt = $"A simple cartoon of {word} for a children's picture card: one object, centered, " +
+                     "soft pastel colors, thick dark outlines, no text, transparent background",
             size = "1024x1024",
+            background = "transparent",
+            output_format = "png",
             n = 1,
         });
         req.Content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -108,7 +115,64 @@ public static class WordImageEndpoint
         var b64 = doc.RootElement.GetProperty("data")[0].GetProperty("b64_json").GetString()
             ?? throw new InvalidOperationException("no image in the response");
         var tmp = file + ".tmp";
-        await File.WriteAllBytesAsync(tmp, Convert.FromBase64String(b64));
+        await File.WriteAllBytesAsync(tmp, Tidy(Convert.FromBase64String(b64)));
         File.Move(tmp, file, overwrite: true);
     }
+
+    /// The drawing alone: background cleared, trimmed to the drawing, centered in a square
+    /// with even padding, 512 px (the app shows it at about 120).
+    public static byte[] Tidy(byte[] png)
+    {
+        using var image = Image.Load<Rgba32>(png);
+        ClearEdgeBackground(image);
+
+        int minX = image.Width, minY = image.Height, maxX = -1, maxY = -1;
+        for (var y = 0; y < image.Height; y++)
+            for (var x = 0; x < image.Width; x++)
+                if (image[x, y].A >= 24)
+                {
+                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                    minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+                }
+        if (maxX < 0) return png; // nothing drawn
+
+        int w = maxX - minX + 1, h = maxY - minY + 1;
+        image.Mutate(c => c.Crop(new Rectangle(minX, minY, w, h)));
+        var side = (int)(Math.Max(w, h) * 1.12);
+        using var square = new Image<Rgba32>(side, side); // starts transparent
+        square.Mutate(c => c
+            .DrawImage(image, new Point((side - w) / 2, (side - h) / 2), 1f)
+            .Resize(512, 512));
+        using var output = new MemoryStream();
+        square.SaveAsPng(output);
+        return output.ToArray();
+    }
+
+    /// If the model drew a background anyway (white or cream), clear it: flood-fill the light
+    /// pixels reachable from the edges. Light parts inside the drawing's outlines stay.
+    static void ClearEdgeBackground(Image<Rgba32> image)
+    {
+        if (image[0, 0].A < 24) return; // already transparent
+        int w = image.Width, h = image.Height;
+        var seen = new bool[w * h];
+        var queue = new Queue<(int X, int Y)>();
+        void Visit(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= w || y >= h || seen[y * w + x]) return;
+            seen[y * w + x] = true;
+            if (IsLight(image[x, y])) queue.Enqueue((x, y));
+        }
+        for (var x = 0; x < w; x++) { Visit(x, 0); Visit(x, h - 1); }
+        for (var y = 0; y < h; y++) { Visit(0, y); Visit(w - 1, y); }
+        while (queue.Count > 0)
+        {
+            var (x, y) = queue.Dequeue();
+            var p = image[x, y];
+            image[x, y] = new Rgba32(p.R, p.G, p.B, 0);
+            Visit(x + 1, y); Visit(x - 1, y); Visit(x, y + 1); Visit(x, y - 1);
+        }
+    }
+
+    static bool IsLight(Rgba32 p) =>
+        p.R > 225 && p.G > 220 && p.B > 205 && Math.Max(p.R, Math.Max(p.G, p.B)) - Math.Min(p.R, Math.Min(p.G, p.B)) < 45;
 }
