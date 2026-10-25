@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,13 @@ namespace backend.Controllers
 
         // "/u/" style segments in the text are spoken as that IPA sound
         private static readonly Regex IpaSegment = new(@"/([^/\s]+)/");
+
+        // One synthesis at a time: two at once crashed the Speech SDK's native code (SIGABRT,
+        // heap corruption) on the Mac. Stage 4 uses this gate too.
+        internal static readonly SemaphoreSlim Synthesis = new(1, 1);
+
+        // The app's lines repeat ("Watch your coach closely."), so keep what's been made.
+        private static readonly ConcurrentDictionary<string, byte[]> Clips = new();
 
         private readonly string _speechKey;
         private readonly string _speechRegion;
@@ -34,28 +42,43 @@ namespace backend.Controllers
             if (string.IsNullOrWhiteSpace(text))
                 return BadRequest("Text is required.");
 
-            var speechConfig = SpeechConfig.FromSubscription(_speechKey, _speechRegion);
-            speechConfig.SpeechSynthesisVoiceName = VoiceName;
-            speechConfig.SetSpeechSynthesisOutputFormat(
-                SpeechSynthesisOutputFormat.Audio24Khz48KBitRateMonoMp3
-            );
+            if (Clips.TryGetValue(text, out var cached))
+                return File(cached, "audio/mpeg");
 
-            // null audio config: keep the audio in memory instead of playing it on the server
-            using var synthesizer = new SpeechSynthesizer(speechConfig, null);
-
-            var result = await synthesizer.SpeakSsmlAsync(BuildSsml(text));
-
-            if (result.Reason == ResultReason.Canceled)
+            await Synthesis.WaitAsync();
+            try
             {
-                var cancellation = SpeechSynthesisCancellationDetails.FromResult(result);
-                Console.WriteLine($"TTS canceled: {cancellation.Reason}, {cancellation.ErrorDetails}");
-                return StatusCode(500, $"TTS failed: {cancellation.Reason}, {cancellation.ErrorDetails}");
+                if (Clips.TryGetValue(text, out cached))
+                    return File(cached, "audio/mpeg");
+
+                var speechConfig = SpeechConfig.FromSubscription(_speechKey, _speechRegion);
+                speechConfig.SpeechSynthesisVoiceName = VoiceName;
+                speechConfig.SetSpeechSynthesisOutputFormat(
+                    SpeechSynthesisOutputFormat.Audio24Khz48KBitRateMonoMp3
+                );
+
+                // null audio config: keep the audio in memory instead of playing it on the server
+                using var synthesizer = new SpeechSynthesizer(speechConfig, null);
+
+                var result = await synthesizer.SpeakSsmlAsync(BuildSsml(text));
+
+                if (result.Reason == ResultReason.Canceled)
+                {
+                    var cancellation = SpeechSynthesisCancellationDetails.FromResult(result);
+                    Console.WriteLine($"TTS canceled: {cancellation.Reason}, {cancellation.ErrorDetails}");
+                    return StatusCode(500, $"TTS failed: {cancellation.Reason}, {cancellation.ErrorDetails}");
+                }
+
+                Console.WriteLine($"Generated TTS audio: {result.AudioData.Length} bytes");
+                Clips[text] = result.AudioData;
+
+                // Return MP3 directly as streaming content
+                return File(result.AudioData, "audio/mpeg");
             }
-
-            Console.WriteLine($"Generated TTS audio: {result.AudioData.Length} bytes");
-
-            // Return MP3 directly as streaming content
-            return File(result.AudioData, "audio/mpeg");
+            finally
+            {
+                Synthesis.Release();
+            }
         }
 
         public static string BuildSsml(string text)
