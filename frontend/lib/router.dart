@@ -19,6 +19,7 @@ import 'screens/settings/settings_screen.dart';
 import 'screens/shell/app_shell.dart';
 import 'screens/testing/golden_phoneme_screen.dart';
 import 'screens/testing/golden_recorder_screen.dart';
+import 'screens/testing/stage4_screen.dart';
 import 'screens/testing/testing_screen.dart';
 import 'screens/welcome/welcome_screen.dart';
 import 'widgets/widgets.dart';
@@ -41,6 +42,7 @@ abstract final class Routes {
   static const wordDrill = '/testing/word-drill';
   static const avatarTest = '/testing/avatar';
   static const goldenRecorder = '/testing/golden';
+  static const stage4 = '/testing/stage4';
   static String goldenPhoneme(String ipa) => '/testing/golden/${Uri.encodeComponent(ipa)}';
 
   static String reading(String passageId) => '/read/$passageId';
@@ -127,6 +129,7 @@ GoRouter buildRouter(AppState state) {
       fullScreen(Routes.wordDrill, (_) => const _PrototypeTheme(child: PracticePage())),
       fullScreen(Routes.avatarTest, (_) => const _PrototypeTheme(child: AvatarTestPage())),
       fullScreen(Routes.goldenRecorder, (_) => const GoldenRecorderScreen()),
+      fullScreen(Routes.stage4, (_) => const Stage4Screen()),
       fullScreen('/testing/golden/:ipa', (s) => GoldenPhonemeScreen(ipa: s.pathParameters['ipa']!)),
     ],
   );

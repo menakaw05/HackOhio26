@@ -51,6 +51,22 @@ window.say = async (text, opts = {}) => {
   }
 };
 
+// Stage 4: say the word, stopping at each time in pauseAt (seconds, one per sound) until
+// Flutter calls window.resumeStep(). Sends {event: 'paused', index} at each stop.
+window.sayStepwise = async (text, pauseAt = [], opts = {}) => {
+  try {
+    const config = await getSpeechConfig();
+    const clip = await synthesize(text, config, opts.tts);
+    notify({ event: 'started', text, duration: clip.frames.length / clip.fps, steps: pauseAt.length });
+    await avatar.play(clip, { ...opts, pauseAt, onPause: (index) => notify({ event: 'paused', index, text }) });
+    notify({ event: 'finished', text });
+  } catch (e) {
+    notify({ event: 'error', message: e.message });
+    log(`sayStepwise() error: ${e.message}`);
+  }
+};
+window.resumeStep = () => avatar.resume();
+
 // 1. Load a bundled T2 avatar preset.
 avatar.load(avatarUrl).then(({ missing }) => {
   log(missing.length ? `Missing ARKit channels: ${missing.join(', ')}` : 'All 52 ARKit channels found.');

@@ -170,14 +170,22 @@ export class Avatar {
   //   boost:  { gains: { jawOpen: 1.4 }, start: 0.20, end: 0.45 }  (seconds)
   //   holdAt: seconds into the clip to freeze the face (e.g. peak of /p/)
   //   holdMs: how long to freeze
-  play({ audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' }, { boost = null, holdAt = null, holdMs = 500 } = {}) {
+  //   pauseAt: stage 4 only. Seconds into the clip to stop and wait at, one per sound;
+  //            onPause(index) is called at each, and playback stays paused until resume().
+  play(
+    { audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' },
+    { boost = null, holdAt = null, holdMs = 500, pauseAt = null, onPause = null } = {},
+  ) {
     this.stop();
     this.boost = boost;
     const el = new Audio(URL.createObjectURL(new Blob([audio], { type: mime })));
     // Azure also sends a few extra viseme events at offset 0 after the real
     // ones; keep the timed ones, in order.
     visemes = visemes.filter((v) => v.time > 0).sort((a, b) => a.time - b.time);
-    this.anim = { el, frames, visemes, fps, holdAt, holdMs, held: false, holding: false };
+    this.anim = {
+      el, frames, visemes, fps, holdAt, holdMs, held: false, holding: false,
+      pauseAt: pauseAt ? [...pauseAt].sort((x, y) => x - y) : null, nextPause: 0, waiting: false, onPause,
+    };
     return new Promise((resolve, reject) => {
       el.onended = () => {
         this.anim = null;
@@ -186,6 +194,15 @@ export class Avatar {
       };
       el.play().catch(reject); // browsers need a user gesture before the first play
     });
+  }
+
+  // Stage 4: continue after a pauseAt stop.
+  resume() {
+    const a = this.anim;
+    if (!a?.waiting) return;
+    a.waiting = false;
+    a.holding = false;
+    a.el.play();
   }
 
   stop() {
@@ -206,6 +223,13 @@ export class Avatar {
     const a = this.anim;
     if (a && !a.holding) {
       const t = a.el.currentTime;
+      if (a.pauseAt && a.nextPause < a.pauseAt.length && t >= a.pauseAt[a.nextPause]) {
+        const index = a.nextPause++;
+        a.holding = true;
+        a.waiting = true;
+        a.el.pause();
+        a.onPause?.(index);
+      }
       if (a.holdAt != null && !a.held && t >= a.holdAt) {
         a.held = true;
         a.holding = true;
