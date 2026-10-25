@@ -62,14 +62,14 @@ class SecondaryButton extends StatelessWidget {
       expand: expand,
       onPressed: _withHaptic(onPressed),
       face: AppColors.surface,
-      edge: AppColors.line,
-      border: AppColors.line,
+      edge: AppColors.lakeDeep,
+      border: AppColors.lake,
       foreground: AppColors.lakeDeep,
     );
   }
 }
 
-/// A pill that sits on a darker edge and presses down into it, like a game button.
+/// A sticker-style pill: outlined, sitting on a darker edge it presses down into.
 class ChunkyButton extends StatefulWidget {
   const ChunkyButton({
     super.key,
@@ -145,9 +145,7 @@ class _ChunkyButtonState extends State<ChunkyButton> {
         decoration: BoxDecoration(
           color: face,
           borderRadius: AppRadius.pillRadius,
-          border: widget.border == null
-              ? null
-              : Border.all(color: widget.border!, width: 2.5),
+          border: Border.all(color: enabled ? widget.border ?? widget.edge : AppColors.inkFaint, width: 2.5),
           boxShadow: _down || !enabled
               ? null
               : [

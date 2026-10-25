@@ -36,9 +36,9 @@ abstract final class AppSize {
 }
 
 abstract final class AppShadows {
-  /// A solid ledge under cards, so they look like chunky tiles.
+  /// A hard shadow under cards, so they look like stickers.
   static const soft = [
-    BoxShadow(color: AppColors.line, offset: Offset(0, 6)),
+    BoxShadow(color: AppColors.lakeDeep, offset: Offset(0, 5)),
   ];
 }
 
