@@ -67,6 +67,8 @@ void main() {
       expect(store.totalTakes, 6);
       await store.deleteTake('u', store.takesFor('u').first.id);
       expect(store.completedCount(['u']), 0);
+      await store.clearAll();
+      expect(store.totalTakes, 0);
     });
 
     test('saves to and reloads from a file', () async {

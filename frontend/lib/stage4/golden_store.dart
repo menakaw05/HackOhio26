@@ -111,6 +111,12 @@ class GoldenStore extends ChangeNotifier {
     await _save();
   }
 
+  Future<void> clearAll() async {
+    _takes.clear();
+    notifyListeners();
+    await _save();
+  }
+
   Map<String, dynamic> toJson() => {
         'version': formatVersion,
         'features': featureNames,

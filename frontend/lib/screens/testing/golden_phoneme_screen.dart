@@ -10,6 +10,7 @@ import '../../stage4/mouth_tracker.dart';
 import '../../stage4/phonemes.dart';
 import '../../stage4/trajectory_chart.dart';
 import '../../theme/app_theme.dart';
+import '../../tts_service.dart';
 import '../../widgets/widgets.dart';
 
 /// Records golden takes for one phoneme: tap to start, tap to stop (auto-stops after a few
@@ -30,6 +31,7 @@ class _GoldenPhonemeScreenState extends State<GoldenPhonemeScreen> {
 
   late final GoldenStore _store = widget.store ?? GoldenStore.instance;
   final MouthTracker _tracker = MouthTracker();
+  final TtsService _tts = TtsService();
   bool? _cameraReady;
   bool _faceFound = false;
   bool _recording = false;
@@ -44,6 +46,7 @@ class _GoldenPhonemeScreenState extends State<GoldenPhonemeScreen> {
     super.initState();
     _store.load();
     _tracker.onFrame = _onFrame;
+    _sayPhoneme();
     _tracker.start().then((ok) {
       if (mounted) setState(() => _cameraReady = ok);
     });
@@ -53,6 +56,7 @@ class _GoldenPhonemeScreenState extends State<GoldenPhonemeScreen> {
   void dispose() {
     _autoStop?.cancel();
     _tracker.dispose();
+    _tts.dispose();
     super.dispose();
   }
 
@@ -66,10 +70,17 @@ class _GoldenPhonemeScreenState extends State<GoldenPhonemeScreen> {
     setState(() => _faceFound = frame != null);
   }
 
+  /// Azure TTS speaks the IPA sound itself (text between slashes), then the example word.
+  void _sayPhoneme() {
+    final phoneme = goldenPhonemeFor(widget.ipa);
+    if (phoneme != null) _tts.speak('The sound /${phoneme.ipa}/, as in ${phoneme.example}.');
+  }
+
   void _toggle() {
     if (_recording) {
       _stop();
     } else {
+      _tts.stop();
       _buffer.clear();
       setState(() => _recording = true);
       _autoStop = Timer(_maxTake, _stop);
@@ -114,6 +125,11 @@ class _GoldenPhonemeScreenState extends State<GoldenPhonemeScreen> {
         return AppPage(
           title: '/${phoneme.ipa}/',
           actions: [
+            IconButton(
+              tooltip: 'Hear the sound',
+              onPressed: _recording ? null : _sayPhoneme,
+              icon: const Icon(Icons.volume_up_rounded),
+            ),
             TextButton.icon(
               onPressed: _recording ? null : _next,
               icon: const Icon(Icons.skip_next_rounded),

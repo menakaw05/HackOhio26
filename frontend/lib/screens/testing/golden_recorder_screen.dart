@@ -28,6 +28,22 @@ class _GoldenRecorderScreenState extends State<GoldenRecorderScreen> {
     _store.load();
   }
 
+  Future<void> _confirmClear() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete all takes?'),
+        content: Text('This deletes all ${_store.totalTakes} takes on this phone. '
+            "Exported files aren't affected."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete all')),
+        ],
+      ),
+    );
+    if (ok == true) await _store.clearAll();
+  }
+
   Future<void> _export(BuildContext buttonContext) async {
     final file = _store.file;
     if (file == null || !await file.exists()) return;
@@ -73,6 +89,12 @@ class _GoldenRecorderScreenState extends State<GoldenRecorderScreen> {
                           ? null
                           : () => _export(buttonContext),
                     ),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                  TextButton.icon(
+                    onPressed: _store.totalTakes == 0 ? null : _confirmClear,
+                    icon: const Icon(Icons.delete_sweep_rounded),
+                    label: const Text('Delete all takes'),
                   ),
                   if (_store.file != null) ...[
                     const SizedBox(height: AppSpace.xs),
