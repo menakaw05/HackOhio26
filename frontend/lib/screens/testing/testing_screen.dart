@@ -31,6 +31,14 @@ class TestingScreen extends StatelessWidget {
               'Needs the avatar-web dev server.',
           onTap: () => context.push(Routes.avatarTest),
         ),
+        const SizedBox(height: AppSpace.m),
+        _TestingTile(
+          icon: Icons.fiber_manual_record_rounded,
+          title: 'Golden data recorder',
+          detail: 'Record your mouth movement for every sound, for stage 4. '
+              'Needs a real iPhone (front camera).',
+          onTap: () => context.push(Routes.goldenRecorder),
+        ),
       ],
     );
   }

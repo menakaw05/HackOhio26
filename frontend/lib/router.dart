@@ -17,6 +17,8 @@ import 'screens/read_aloud/reading_results_screen.dart';
 import 'screens/read_aloud/reading_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'screens/shell/app_shell.dart';
+import 'screens/testing/golden_phoneme_screen.dart';
+import 'screens/testing/golden_recorder_screen.dart';
 import 'screens/testing/testing_screen.dart';
 import 'screens/welcome/welcome_screen.dart';
 import 'widgets/widgets.dart';
@@ -38,6 +40,8 @@ abstract final class Routes {
   static const lookAndSay = '/look-and-say';
   static const wordDrill = '/testing/word-drill';
   static const avatarTest = '/testing/avatar';
+  static const goldenRecorder = '/testing/golden';
+  static String goldenPhoneme(String ipa) => '/testing/golden/${Uri.encodeComponent(ipa)}';
 
   static String reading(String passageId) => '/read/$passageId';
   static String readingResults(String passageId) => '/read/$passageId/results';
@@ -122,6 +126,8 @@ GoRouter buildRouter(AppState state) {
       // the original prototype screens, with the theme they were built against
       fullScreen(Routes.wordDrill, (_) => const _PrototypeTheme(child: PracticePage())),
       fullScreen(Routes.avatarTest, (_) => const _PrototypeTheme(child: AvatarTestPage())),
+      fullScreen(Routes.goldenRecorder, (_) => const GoldenRecorderScreen()),
+      fullScreen('/testing/golden/:ipa', (s) => GoldenPhonemeScreen(ipa: s.pathParameters['ipa']!)),
     ],
   );
 }
