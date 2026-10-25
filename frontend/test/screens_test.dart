@@ -65,15 +65,16 @@ void main() {
     expect(find.text('Prototype'), findsOneWidget);
   });
 
-  testWidgets('word practice walks hear, watch, try, feedback', (tester) async {
+  testWidgets('word practice: the word first, then the stages after a miss', (tester) async {
     final services = FakePracticeServices(
       scores: [
         scoreOf('boot', [('b', 95), ('u', 40), ('t', 90)], accuracy: 65),
         scoreOf('boot', [('b', 95), ('u', 92), ('t', 90)], accuracy: 93),
       ],
       lipChecks: [
-        const LipCheck(passed: false, score: 0.2, tip: 'Try rounding your lips more.'),
-        const LipCheck(passed: true, score: 0.8, tip: 'Great job!'),
+        const LipCheck(passed: false, score: 0.2, tip: 'Try rounding your lips more.'), // stage 2
+        const LipCheck(passed: true, score: 0.8, tip: 'Great job!'), // stage 3
+        const LipCheck(passed: true, score: 0.9, tip: 'Great job!'), // stage 4, the "oo"
       ],
     );
     createPracticeServices = () => services;
@@ -81,6 +82,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('boot'), findsOneWidget);
     expect(find.text('Your avatar coach'), findsOneWidget);
+    // stage 1 is just the word: no stages yet
+    expect(find.byType(StepperBar), findsNothing);
+    expect(find.text('Tap the mic and say "boot".'), findsOneWidget);
 
     Future<void> tapText(String text) async {
       await tester.ensureVisible(find.text(text));
@@ -99,32 +103,37 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    // the first try is unaided: Watch stays locked until a miss
-    await tapText('Watch');
-    expect(find.text('Listen to how "boot" sounds.'), findsOneWidget);
-    await tapText('Next: Try');
     await sayIt();
-    // Azure: the /u/ was weak, and /u/ has a lip model
-    expect(find.text('Almost!'), findsOneWidget);
-    expect(find.text("Let's work on the /u/ sound."), findsOneWidget);
-
-    await tapText('Watch');
-    expect(find.text('Tongue position schematic'), findsOneWidget);
-    expect(find.text('Guidance'), findsOneWidget);
-    await tapText('Feedback');
-    await tapText('Practice the /u/ sound');
+    // missed: the stages show, and it's on to the trouble sound
+    expect(find.byType(StepperBar), findsOneWidget);
+    expect(find.text('Let\'s practice this a bit more! Can you say "oo" in boot?'), findsOneWidget);
     expect(services.lipModel, 'u');
-    expect(find.text('Tap the mic and say "oo".'), findsOneWidget);
+
     await sayIt();
-    // a miss: the lip model's tip, and the coach demonstrates
+    // stage 2 missed: the coach says the lip model's tip and shows it
     expect(find.text('Try rounding your lips more.'), findsOneWidget);
     expect(find.text('Watch your coach, then say "oo".'), findsOneWidget);
     await sayIt();
-    expect(find.text('You got the /u/ sound! Now say the whole word.'), findsOneWidget);
+    expect(find.text("You got it! Let's put it all together now."), findsOneWidget);
 
+    // stage 4: one sound at a time
+    await tapText('Put it together');
+    expect(find.text('Listen to your coach, then say "buh".'), findsOneWidget);
+    await sayIt();
+    expect(find.text('Listen to your coach, then say "oo".'), findsOneWidget);
+    await sayIt();
+    expect(find.text('Listen to your coach, then say "tuh".'), findsOneWidget);
+    await sayIt();
+    expect(find.text("Now let's say the whole word!"), findsOneWidget);
+
+    // stage 5: the whole word again, with the first score beside it
+    await tapText('Say the whole word');
     await sayIt();
     expect(find.text('Great!'), findsOneWidget);
-    expect(find.text('You said "boot" clearly!'), findsOneWidget);
+    expect(find.text('You said "boot"!'), findsOneWidget);
+    expect(find.bySemanticsLabel('First try 65, now 93'), findsOneWidget);
+    final state = Provider.of<AppState>(tester.element(find.byType(Scaffold).first), listen: false);
+    expect(state.hasBuiltUp('boot'), isTrue); // next time: no breaking it down
     expect(tester.takeException(), isNull);
   });
 
