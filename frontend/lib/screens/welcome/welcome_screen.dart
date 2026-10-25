@@ -26,10 +26,7 @@ class WelcomeScreen extends StatelessWidget {
               Center(
                 child: EchoLogo(size: 40, onLongPress: () => showDebugMenu(context)),
               ),
-              const SizedBox(height: AppSpace.xs),
-              Text('See it. Say it. Shine!',
-                  style: AppText.section.copyWith(color: AppColors.lotusDeep), textAlign: TextAlign.center),
-              const SizedBox(height: AppSpace.s),
+              const SizedBox(height: AppSpace.m),
               const Center(child: BelugaBuddy(size: 180)),
               const SizedBox(height: AppSpace.l),
               Text("Who's practicing today?", style: AppText.title, textAlign: TextAlign.center),
