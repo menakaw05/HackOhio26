@@ -13,7 +13,9 @@ import 'package:frontend/widgets/widgets.dart';
 import 'fake_practice_services.dart';
 
 /// Pumps the real app router at [location] as [learner], on an iPhone-sized screen.
-Future<GoRouter> pumpAt(WidgetTester tester, String location, {String learner = 'maya'}) async {
+/// [settle] false for screens that show a spinner while loading (it never settles in tests).
+Future<GoRouter> pumpAt(WidgetTester tester, String location,
+    {String learner = 'maya', bool settle = true}) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
   // Reduce Motion on, so the repeating mic pulse doesn't keep pumpAndSettle waiting
   tester.platformDispatcher.accessibilityFeaturesTestValue =
@@ -29,7 +31,11 @@ Future<GoRouter> pumpAt(WidgetTester tester, String location, {String learner = 
     child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
   ));
   router.go(location);
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
   return router;
 }
 

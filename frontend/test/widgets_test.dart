@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:frontend/theme/app_theme.dart';
+import 'package:frontend/stage4/trajectory_chart.dart';
 import 'package:frontend/widgets/widgets.dart';
 
 void main() {
@@ -35,6 +36,10 @@ void main() {
             const StepperBar(steps: ['Hear', 'Watch', 'Try', 'Feedback'], current: 1),
             const AttemptDots(total: 3, results: [FeedbackKind.almost]),
             const SkeletonBox(width: 120),
+            const TrajectoryChart(series: [[0, 1, 2, 3, 4], [1, 2, 3, 4, 5]], min: -3, max: 3, faint: [
+              [[0, 0, 0, 0, 0], [9, 9, 9, 9, 9]],
+            ]),
+            const TrajectoryChart(series: [[0, 1, 2, 3, 4], [1, 2, 3, 4, 5]]),
             const ErrorState(),
           ],
         ),

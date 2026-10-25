@@ -175,8 +175,12 @@ export class Avatar {
   //     gets there, so the lips close once and open into the vowel. Otherwise
   //     (the /p/ of "ahp") the audio pauses on the pose when it gets there,
   //     which is the silent closure, so the sound isn't cut in two.
-  play({ audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' },
-    { boost = null, holdAt = null, holdMs = 500, holdBefore = false } = {}) {
+  //   pauseAt: stage 4 only. Seconds into the clip to stop and wait at, one per sound;
+  //            onPause(index) is called at each, and playback stays paused until resume().
+  play(
+    { audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' },
+    { boost = null, holdAt = null, holdMs = 500, holdBefore = false, pauseAt = null, onPause = null } = {},
+  ) {
     this.stop();
     this.boost = boost;
     const el = new Audio(URL.createObjectURL(new Blob([audio], { type: mime })));
@@ -188,6 +192,7 @@ export class Avatar {
     this.anim = {
       el, frames, visemes, fps, holdAt, holdMs, holdBefore: before,
       held: false, holding: false, previewStart: now, previewUntil: before ? now + holdMs : 0,
+      pauseAt: pauseAt ? [...pauseAt].sort((x, y) => x - y) : null, nextPause: 0, waiting: false, onPause,
     };
     return new Promise((resolve, reject) => {
       el.onended = () => {
@@ -200,6 +205,30 @@ export class Avatar {
       if (before) setTimeout(start, holdMs);
       else start();
     });
+  }
+
+  // Stage 4: continue after a pauseAt stop. iOS WebKit can resume a paused <audio> silently
+  // when play() comes from script (the face moves on, no sound), so carry on with a fresh
+  // element from the same spot. The face stays held until the new audio is ready.
+  resume() {
+    const a = this.anim;
+    if (!a?.waiting) return;
+    a.waiting = false;
+    const old = a.el;
+    const at = old.currentTime;
+    const el = new Audio(old.src);
+    el.preload = 'auto';
+    el.onended = old.onended;
+    old.onended = null;
+    const start = () => {
+      el.currentTime = at;
+      a.el = el;
+      a.holding = false;
+      el.play().catch((e) => console.warn('resume play failed', e));
+    };
+    if (el.readyState >= 1) start();
+    else el.addEventListener('loadedmetadata', start, { once: true });
+    el.load();
   }
 
   stop() {
@@ -226,7 +255,14 @@ export class Avatar {
       if (a.frames[i]) this.applyFrame(a.frames[i].map((v) => v * k), a.holdAt, a.visemes);
     } else if (a && !a.holding) {
       const t = a.el.currentTime;
-      if (a.holdAt != null && !a.holdBefore && !a.held && t >= a.holdAt) {
+      if (a.pauseAt && a.nextPause < a.pauseAt.length && t >= a.pauseAt[a.nextPause]) {
+        const index = a.nextPause++;
+        a.holding = true;
+        a.waiting = true;
+        a.el.pause();
+        a.onPause?.(index);
+      }
+      if (a.holdAt != null && !a.holdBefore && !a.held && !a.waiting && t >= a.holdAt) {
         a.held = true;
         a.holding = true;
         a.el.pause();
