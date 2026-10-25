@@ -6,7 +6,8 @@ import '../data/models.dart';
 import '../theme/app_theme.dart';
 import 'motion.dart';
 
-/// "echo" wordmark: sound waves in a lake-blue bubble, with a lotus-pink o.
+/// "echo-me" wordmark: sound waves in a lake-blue bubble, then "echo" with a smaller
+/// lotus-pink "-me" so "echo" stands out.
 class EchoLogo extends StatelessWidget {
   const EchoLogo({super.key, this.size = 28, this.onLongPress, this.light = false});
 
@@ -35,15 +36,18 @@ class EchoLogo extends StatelessWidget {
         SizedBox(width: size * 0.3),
         Text.rich(
           TextSpan(children: [
-            TextSpan(text: 'ech', style: TextStyle(color: light ? Colors.white : AppColors.ink)),
-            const TextSpan(text: 'o', style: TextStyle(color: AppColors.lotus)),
+            TextSpan(text: 'echo', style: TextStyle(color: light ? Colors.white : AppColors.ink)),
+            TextSpan(
+              text: '-me',
+              style: TextStyle(color: AppColors.lotus, fontSize: size * 0.6),
+            ),
           ]),
           style: AppText.display.copyWith(fontSize: size),
         ),
       ],
     );
     return Semantics(
-      label: 'echo',
+      label: 'echo-me',
       excludeSemantics: true,
       child: GestureDetector(onLongPress: onLongPress, child: mark),
     );
@@ -151,7 +155,7 @@ class _BelugaBuddyState extends State<BelugaBuddy> with TickerProviderStateMixin
   Widget build(BuildContext context) {
     final mood = _mood;
     return Semantics(
-      label: 'echo beluga',
+      label: 'echo-me beluga',
       excludeSemantics: true,
       child: GestureDetector(
         onTap: _cheer,

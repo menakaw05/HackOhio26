@@ -40,7 +40,7 @@ class _EchoAppState extends State<EchoApp> {
       child: ChangeNotifierProvider.value(
         value: _state.queue,
         child: MaterialApp.router(
-          title: 'echo',
+          title: 'echo-me',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
           routerConfig: _router,
