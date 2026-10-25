@@ -6,10 +6,14 @@ class RawFrameFeatures {
   final double mouthHeightNorm;
   final double roundRatio;
 
+  /// When the camera frame was processed, if the payload has it.
+  final DateTime? time;
+
   RawFrameFeatures({
     required this.lipGapNorm,
     required this.mouthHeightNorm,
     required this.roundRatio,
+    this.time,
   });
 }
 
@@ -104,6 +108,7 @@ RawFrameFeatures? extractRawFrameFeaturesSingle(
     lipGapNorm: lipGapNorm,
     mouthHeightNorm: mouthHeightNorm,
     roundRatio: roundRatio,
+    time: DateTime.tryParse(frameMap["timestamp"]?.toString() ?? ""),
   );
 }
 
