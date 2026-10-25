@@ -73,6 +73,7 @@ flutter:
   assets:
     - assets/models/phoneme_models/
     - assets/models/mappings/
+    - assets/golden/
 
   fonts:
     - family: Nunito
