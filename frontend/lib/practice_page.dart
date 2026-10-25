@@ -51,7 +51,7 @@ class _PracticePageState extends State<PracticePage> {
   // Stage 3: the avatar demonstrates, the child retries until the sound passes.
   GlobalKey<AvatarViewState> _avatarKey = GlobalKey();
   bool _avatarReady = false;
-  bool _demoPending = false;
+  String? _pendingTip; // what the coach should say once it has loaded
   int _demoTry = 0;
   double _demoAccuracy = 0;
 
@@ -182,10 +182,12 @@ class _PracticePageState extends State<PracticePage> {
       // the coach starts loading now (hidden) so it's ready if stage 3 is needed
       _avatarKey = GlobalKey();
       _avatarReady = false;
-      _demoPending = false;
+      _pendingTip = null;
     });
     _tts.speak("Let's practice the /${worst.phoneme}/ sound. Say /${prompt.ipa}/.");
     _initCamera();
+    // load the lip model now too, so the coach can prepare its tips
+    _model.loadModel(worst.phoneme).then((_) => _prepareCoach(), onError: (e) => print('face model error: $e'));
   }
 
   Future<void> _initCamera() async {
@@ -247,7 +249,7 @@ class _PracticePageState extends State<PracticePage> {
       _startDemo(tip, spoken: tip);
     } else {
       setState(() => _feedback = '$tip Watch again, then try.');
-      _speakThenDemonstrate(tip);
+      _coachSays(tip);
     }
   }
 
@@ -287,8 +289,12 @@ class _PracticePageState extends State<PracticePage> {
 
   // -------------------------
   // DEMO (stage 3): the avatar shows the sound, the child keeps practicing
-  // just that sound until it passes (judged by _assessSound)
+  // just that sound until the lip model passes it (see _judgeSound)
   // -------------------------
+
+  // The coach speaks tips at a normal pace; sounds are demonstrated slower.
+  static const Map<String, dynamic> _tipTts = {'rate': '-10%'};
+
   void _startDemo(String cue, {String? spoken}) {
     final target = _targetPhoneme!;
     final tip = isTongueSound(target.phoneme)
@@ -300,18 +306,35 @@ class _PracticePageState extends State<PracticePage> {
       _demoAccuracy = target.accuracyScore;
       _feedback = cue.isEmpty ? tip : '$cue $tip';
     });
-    _speakThenDemonstrate(spoken ?? tip);
+    _tts.stop();
+    _coachSays(spoken ?? tip);
   }
 
-  /// Speaks a short cue, then the avatar demonstrates once its page has loaded.
-  Future<void> _speakThenDemonstrate(String cue) async {
-    await _tts.speak(cue);
-    if (!mounted || _mode != PracticeMode.demo) return;
-    if (_avatarReady) {
-      _demonstrate();
-    } else {
-      _demoPending = true;
+  /// Has the coach synthesize everything it may say in stage 3 (the sound and
+  /// each of the lip model's tips for it) while the child is still in stage 2.
+  void _prepareCoach() {
+    final avatar = _avatarKey.currentState;
+    if (!_avatarReady || avatar == null || _targetPhoneme == null) return;
+    avatar.prepare(_prompt.text, tts: {'ipa': _prompt.ipa});
+    if (_model.isLoaded) {
+      for (final tip in _model.missTips) {
+        avatar.prepare(tip, tts: _tipTts);
+      }
     }
+  }
+
+  /// The coach says the tip, then demonstrates the sound, in one go. Both
+  /// were prepared during stage 2, so neither waits on the network.
+  void _coachSays(String tip) {
+    if (!mounted || _mode != PracticeMode.demo) return;
+    if (!_avatarReady) {
+      _pendingTip = tip;
+      return;
+    }
+    _avatarKey.currentState?.sayAll([
+      (tip, {'tts': _tipTts}),
+      (_prompt.text, _demoOpts()),
+    ]);
   }
 
   void _onAvatarMessage(String raw) {
@@ -319,33 +342,35 @@ class _PracticePageState extends State<PracticePage> {
     switch (m['event']) {
       case 'ready':
         _avatarReady = true;
-        // synthesize the coach's syllable now, so the demo starts right away
-        if (_targetPhoneme != null) {
-          _avatarKey.currentState?.prepare(_prompt.text, tts: {'ipa': _prompt.ipa});
-        }
-        if (_demoPending) {
-          _demoPending = false;
-          _demonstrate();
+        _prepareCoach();
+        final tip = _pendingTip;
+        if (tip != null) {
+          _pendingTip = null;
+          _coachSays(tip);
         }
       case 'error':
         setState(() => _error = 'Avatar: ${m['message']}');
     }
   }
 
-  /// The avatar says the sound on its own ("puh", "sss"), holding on its mouth
-  /// shape and exaggerating its movement less as the child gets closer.
-  void _demonstrate() {
-    final target = _targetPhoneme;
-    if (target == null) return;
-    final prompt = _prompt;
-    final viseme = visemeFor(target.phoneme);
-    final gains = boostFor(target.phoneme, boostGain(_demoAccuracy));
-    _avatarKey.currentState?.say(prompt.text, opts: {
-      'tts': {'ipa': prompt.ipa},
+  /// The avatar says the sound on its own ("pah", "sss"), showing its mouth
+  /// shape first and exaggerating its movement less as the child gets closer.
+  Map<String, dynamic> _demoOpts() {
+    final phoneme = _targetPhoneme!.phoneme;
+    final viseme = visemeFor(phoneme);
+    final gains = boostFor(phoneme, boostGain(_demoAccuracy));
+    return {
+      'tts': {'ipa': _prompt.ipa},
       if (viseme != null) 'holdViseme': viseme,
-      'holdMs': 600,
+      'holdMs': 500,
       if (gains.isNotEmpty) 'boost': {'gains': gains, 'start': 0, 'end': 30},
-    });
+    };
+  }
+
+  /// "Watch again": just the sound.
+  void _demonstrate() {
+    if (_targetPhoneme == null) return;
+    _avatarKey.currentState?.say(_prompt.text, opts: _demoOpts());
   }
 
   Future<void> _playLastRecording() async {

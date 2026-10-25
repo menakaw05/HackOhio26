@@ -37,6 +37,12 @@ class PhonemeQualityModel {
 
   bool get isLoaded => _session != null;
 
+  /// The tips this model can give for a miss (needs [loadModel] first).
+  List<String> get missTips => [
+        for (final e in _labelToFeedback.entries)
+          if (!correctLabels.contains(e.key)) e.value as String,
+      ];
+
   /// load ONNX model + label maps for a specific phoneme
   Future<void> loadModel(String phoneme) async {
     final suffix = phonemeMap[phoneme];
