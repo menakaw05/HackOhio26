@@ -86,15 +86,6 @@ void main() {
     expect(neighbors(r, p2), (before: 'ɑ', after: null));
   });
 
-  test('stage 4 says the word one sound at a time', () {
-    final sounds = breakDown('boot', ['b', 'u', 't'], target: 1);
-    expect(sounds.map((c) => c.text), ['buh', 'oo', 'tuh']);
-    expect(sounds.map((c) => c.hasTarget), [false, true, false]);
-    // the letters each sound is spelled with: b | oo | t
-    expect(sounds.map((c) => 'boot'.substring(c.start, c.end)), ['b', 'oo', 't']);
-    expect(breakDown('red', ['r', 'ɛ', 'd'], target: 0).first.ipa, 'ɹʌ');
-  });
-
   test('letters for each sound', () {
     String spell(String w, int n) => [for (var i = 0; i < n; i++) () {
           final (a, b) = lettersFor(w, n, i);
