@@ -200,6 +200,7 @@ void main() {
     expect(state.queue.isEmpty, isTrue);
     await tester.scrollUntilVisible(find.text('Add to my practice'), 300,
         scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle(); // let the final scroll lay out before tapping
     await tester.tap(find.text('Add to my practice'));
     await tester.pumpAndSettle();
     expect(state.queue.isEmpty, isFalse);
