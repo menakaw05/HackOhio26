@@ -33,6 +33,15 @@ class AppState extends ChangeNotifier {
   List<DayActivity> historySince(DateTime since) =>
       history.where((d) => !d.date.isBefore(since)).toList();
 
+  // Words each learner has already built up in stage 4 (this run). The first time a word is
+  // practiced it's broken down and put back together; after that it's the word, then just
+  // the trouble sound.
+  final Set<String> _builtUp = {};
+
+  String _builtKey(String word) => '${_current?.learner.id}:${word.toLowerCase()}';
+  bool hasBuiltUp(String word) => _builtUp.contains(_builtKey(word));
+  void markBuiltUp(String word) => _builtUp.add(_builtKey(word));
+
   void selectLearner(String id) {
     _current = _profiles.firstWhere((p) => p.learner.id == id);
     queue.replaceAll(_current!.queue);
