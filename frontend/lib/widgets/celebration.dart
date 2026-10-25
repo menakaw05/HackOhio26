@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'motion.dart';
 
-/// A burst of stars and lotus petals. Plays each time [playCount] goes up.
+/// A burst of stars and bubbles, with two fish swimming across. Plays each time [playCount]
+/// goes up.
 class CelebrationOverlay extends StatefulWidget {
   const CelebrationOverlay({super.key, required this.playCount});
 
@@ -110,11 +111,41 @@ class _CelebrationPainter extends CustomPainter {
       if (p.star) {
         canvas.drawPath(_star(p.size), paint);
       } else {
-        // lotus petal
-        canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: p.size * 0.6, height: p.size * 1.2), paint);
+        // a bubble with a shine
+        canvas.drawCircle(Offset.zero, p.size * 0.6,
+            paint
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2.5);
+        canvas.drawCircle(Offset(-p.size * 0.2, -p.size * 0.2), p.size * 0.14,
+            Paint()..color = Colors.white.withValues(alpha: (1 - t).clamp(0, 1)));
       }
       canvas.restore();
     }
+
+    // two fish swim across, one each way
+    _fish(canvas, Offset(-60 + (size.width + 120) * t, size.height * 0.28 + math.sin(t * 12) * 8),
+        AppColors.sky, 1);
+    _fish(canvas, Offset(size.width + 60 - (size.width + 120) * t, size.height * 0.62 + math.sin(t * 10) * 8),
+        AppColors.lotus, -1);
+  }
+
+  /// A little fish facing [dir] (1 = right).
+  void _fish(Canvas canvas, Offset at, Color color, double dir) {
+    canvas.save();
+    canvas.translate(at.dx, at.dy);
+    canvas.scale(dir, 1);
+    final body = Paint()..color = color;
+    canvas.drawPath(
+        Path()
+          ..moveTo(-16, 0)
+          ..lineTo(-30, -11)
+          ..lineTo(-30, 11)
+          ..close(),
+        body);
+    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: 40, height: 26), body);
+    canvas.drawCircle(const Offset(10, -3), 4.5, Paint()..color = Colors.white);
+    canvas.drawCircle(const Offset(11, -3), 2.3, Paint()..color = AppColors.ink);
+    canvas.restore();
   }
 
   Path _star(double size) {
