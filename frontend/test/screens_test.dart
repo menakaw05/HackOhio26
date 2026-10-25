@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:frontend/data/app_state.dart';
+import 'package:frontend/data/mock/demo_seed.dart';
 import 'package:frontend/practice_services.dart';
 import 'package:frontend/router.dart';
 import 'package:frontend/theme/app_theme.dart';
@@ -181,6 +182,11 @@ void main() {
   });
 
   testWidgets('diagnostic: 12 words, sound profile, add to practice', (tester) async {
+    // Azure scores every word; /r/ (spelled ɹ by Azure) is weak
+    createPracticeServices = () => FakePracticeServices(scores: [
+          for (final w in diagnosticWords)
+            scoreOf(w, [for (final p in phonemesFor(w)) p == 'r' ? ('ɹ', 40.0) : (p, 92.0)], accuracy: 85),
+        ]);
     final router = await pumpAt(tester, Routes.diagnostic, learner: 'sam');
     expect(find.text('Word 1 of 12'), findsOneWidget);
     for (var i = 0; i < 12; i++) {
