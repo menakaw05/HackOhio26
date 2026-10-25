@@ -421,6 +421,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     final coach = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (pictureFor(_word.text) case final picture?)
+          Text(picture, style: const TextStyle(fontSize: 64), textAlign: TextAlign.center),
         Text(_word.text, style: AppText.wordHero, textAlign: TextAlign.center),
         const SizedBox(height: AppSpace.s),
         _SoundRow(
@@ -452,6 +454,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
 
     final stage = _AvatarStage(
       coach: _coachView(),
+      // stages 1 and 2 are without the coach: it waits, hidden, until the child has missed
+      // and opens Watch or the sound practice reaches the demonstration (stage 3)
+      coachShown: _step == _Step.watch || _demo,
       camera: _cameraOn ? _cameraView() : null,
       vertical: wide,
     );
@@ -747,9 +752,17 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
 
 /// The coach, with the child's camera beside it while they try.
 class _AvatarStage extends StatelessWidget {
-  const _AvatarStage({required this.coach, this.camera, this.vertical = false});
+  const _AvatarStage({
+    required this.coach,
+    required this.coachShown,
+    this.camera,
+    this.vertical = false,
+  });
 
   final Widget coach;
+
+  /// Otherwise the porthole shows the beluga, with the coach loaded behind it.
+  final bool coachShown;
   final Widget? camera;
 
   /// Stack the camera under the coach (the tall stage on wide screens).
@@ -758,6 +771,18 @@ class _AvatarStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final camera = this.camera;
+    final window = Stack(
+      children: [
+        Positioned.fill(child: coach),
+        if (!coachShown)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: AppColors.lakeMist,
+              child: FittedBox(child: BelugaBuddy(size: 160)),
+            ),
+          ),
+      ],
+    );
     return Container(
       // a pond, with the coach looking out of a porthole
       decoration: const BoxDecoration(
@@ -768,11 +793,11 @@ class _AvatarStage extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(AppSpace.m),
       child: camera == null
-          ? Center(child: Porthole(child: coach))
+          ? Center(child: Porthole(child: window))
           : Flex(
               direction: vertical ? Axis.vertical : Axis.horizontal,
               children: [
-                Expanded(child: Center(child: Porthole(child: coach))),
+                Expanded(child: Center(child: Porthole(child: window))),
                 const SizedBox(width: AppSpace.s, height: AppSpace.s),
                 Expanded(child: camera),
               ],
