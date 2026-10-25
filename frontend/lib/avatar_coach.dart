@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'speech_models.dart';
 
 // Stage 3 helpers: which avatar mouth shape to hold and which movement to
@@ -117,3 +119,29 @@ SoundPrompt soundPromptFor(String ipa, {String? before, String? after}) {
   }
   return (before: null, after: null);
 }
+
+/// One sound of the word in stage 4. [text] is how it's said ("buh", "oo"), [ipa] what the
+/// coach says, [hasTarget] whether it's the trouble sound, and [start]-[end] the letters
+/// it's spelled with, for highlighting.
+typedef Chunk = ({String text, String ipa, bool hasTarget, int start, int end});
+
+/// Which letters of [word] spell its [i]th sound, roughly: the letters shared out evenly
+/// over the sounds ("boot" -> b | oo | t, "rabbit" -> r | a | bb | i | t).
+(int, int) lettersFor(String word, int soundCount, int i) {
+  int at(int k) => ((k * word.length) / soundCount).round().clamp(0, word.length);
+  return (at(i), math.max(at(i + 1), at(i) + 1).clamp(0, word.length));
+}
+
+/// Stage 4: the word one sound at a time, each said like a teacher would ("boot" ->
+/// "buh", "oo", "tuh"), before the whole word again. [target] is the trouble sound's index.
+List<Chunk> breakDown(String word, List<String> phonemes, {required int target}) => [
+      for (var i = 0; i < phonemes.length; i++)
+        () {
+          final prompt = soundPromptFor(_spoken(phonemes[i]));
+          final (start, end) = lettersFor(word, phonemes.length, i);
+          return (text: prompt.text, ipa: prompt.ipa, hasTarget: i == target, start: start, end: end);
+        }(),
+    ];
+
+// The seeded words spell r and g the plain way; the coach's voice wants the IPA letters.
+String _spoken(String phoneme) => const {'r': 'ɹ', 'g': 'ɡ'}[phoneme] ?? phoneme;
