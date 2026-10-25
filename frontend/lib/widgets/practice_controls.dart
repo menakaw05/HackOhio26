@@ -50,6 +50,7 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final onPressed = widget.onPressed;
     final color = widget.listening ? AppColors.lotus : AppColors.lake;
+    final face = onPressed == null ? AppColors.inkFaint : color;
     return Semantics(
       button: true,
       label: widget.listening ? 'Stop listening' : 'Start talking',
@@ -74,13 +75,22 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
             ),
             PressScale(
               enabled: onPressed != null,
-              child: SizedBox.square(
-                dimension: AppSize.micButton,
+              child: Container(
+                width: AppSize.micButton,
+                height: AppSize.micButton,
+                // a big candy button: white rim, darker edge underneath, soft glow
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 5),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.edgeOf(face), offset: const Offset(0, 7)),
+                    BoxShadow(color: face.withValues(alpha: 0.45), blurRadius: 28, spreadRadius: 4),
+                  ],
+                ),
                 child: Material(
                   shape: const CircleBorder(),
-                  color: onPressed == null ? AppColors.inkFaint : color,
-                  elevation: 4,
-                  shadowColor: AppColors.shadow,
+                  color: face,
+                  clipBehavior: Clip.antiAlias,
                   child: InkWell(
                     customBorder: const CircleBorder(),
                     onTap: onPressed == null
@@ -92,7 +102,7 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
                     child: Icon(
                       widget.listening ? Icons.stop_rounded : Icons.mic_rounded,
                       color: Colors.white,
-                      size: 40,
+                      size: 48,
                     ),
                   ),
                 ),
@@ -142,11 +152,11 @@ class StepperBar extends StatelessWidget {
                     children: [
                       AnimatedContainer(
                         duration: AppMotion.medium,
-                        height: 6,
+                        height: 12,
                         decoration: BoxDecoration(
-                          color: i <= current && !locked.contains(i)
-                              ? AppColors.lake
-                              : AppColors.lakeMist,
+                          color: i == current
+                              ? AppColors.lotus
+                              : (i < current && !locked.contains(i) ? AppColors.lake : AppColors.lakeMist),
                           borderRadius: AppRadius.pillRadius,
                         ),
                       ),
@@ -172,7 +182,7 @@ class StepperBar extends StatelessWidget {
   }
 }
 
-/// One dot per attempt, colored by how it went; empty dots are attempts left.
+/// One star per attempt, colored by how it went; empty stars are attempts left.
 class AttemptDots extends StatelessWidget {
   const AttemptDots({super.key, required this.total, required this.results});
 
@@ -186,19 +196,14 @@ class AttemptDots extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // a star per try: gold when it was great, the result's color otherwise
           for (var i = 0; i < total; i++)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: i < results.length ? results[i].color : null,
-                border: Border.all(
-                  color: i < results.length ? results[i].color : AppColors.inkFaint,
-                  width: 2,
-                ),
-              ),
+            Icon(
+              i < results.length ? Icons.star_rounded : Icons.star_outline_rounded,
+              size: 30,
+              color: i >= results.length
+                  ? AppColors.inkFaint
+                  : (results[i] == FeedbackKind.success ? AppColors.sun : results[i].color),
             ),
         ],
       ),

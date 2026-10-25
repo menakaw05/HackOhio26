@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'motion.dart';
 
-/// Rounded white card with a soft shadow. Pass [gradient] for hero cards.
+/// Rounded white tile on a solid ledge. Pass [gradient] for hero cards.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -36,7 +36,10 @@ class AppCard extends StatelessWidget {
             color: gradient == null ? color : null,
             gradient: gradient,
             borderRadius: AppRadius.cardRadius,
-            boxShadow: AppShadows.soft,
+            border: gradient == null ? Border.all(color: AppColors.line, width: 2) : null,
+            boxShadow: gradient == null
+                ? AppShadows.soft
+                : [BoxShadow(color: AppColors.edgeOf(gradient!.colors.last), offset: const Offset(0, 6))],
           ),
           child: Material(
             type: MaterialType.transparency,
