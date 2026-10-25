@@ -98,15 +98,19 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await tapText('Next: Watch');
-    expect(find.text('Tongue position schematic'), findsOneWidget);
-    expect(find.text('Guidance'), findsOneWidget);
+    // the first try is unaided: Watch stays locked until a miss
+    await tapText('Watch');
+    expect(find.text('Listen to how "boot" sounds.'), findsOneWidget);
     await tapText('Next: Try');
     await sayIt();
     // Azure: the /u/ was weak, and /u/ has a lip model
     expect(find.text('Almost!'), findsOneWidget);
     expect(find.text("Let's work on the /u/ sound."), findsOneWidget);
 
+    await tapText('Watch');
+    expect(find.text('Tongue position schematic'), findsOneWidget);
+    expect(find.text('Guidance'), findsOneWidget);
+    await tapText('Feedback');
     await tapText('Practice the /u/ sound');
     expect(services.lipModel, 'u');
     expect(find.text('Tap the mic and say "oo".'), findsOneWidget);

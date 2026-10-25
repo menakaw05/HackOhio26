@@ -32,6 +32,7 @@ const Map<String, dynamic> _tipTts = {'rate': '-10%'};
 
 /// The hero screen: Hear → Watch → Try → Feedback for one word.
 ///
+/// The first try is unaided: Watch (the coach) opens only after a miss.
 /// Try scores the word with Azure. If the weakest sound has a lip model
 /// (/p/, /æ/, /u/), the child can practice it on its own in a syllable
 /// ("pah"), checked by the camera and the lip model. After a miss the coach
@@ -65,6 +66,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   String? _focusPhoneme;
   int _celebrations = 0;
 
+  String? _weakest; // the weakest sound in the last missed word
+
   // Sound practice: the weakest sound, said with the word's own vowel ("pah").
   PhonemeAssessment? _practice; // offered after a missed word
   PhonemeAssessment? _target; // being practiced now
@@ -92,6 +95,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   }
 
   bool get _outOfTries => _attempts.length >= _maxAttempts;
+
+  /// The coach only demonstrates once the child has tried on their own and missed.
+  bool get _missed => _attempts.any((a) => a.kind != FeedbackKind.success);
 
   /// Azure's sounds once the word has been tried, otherwise the word's own.
   List<String> get _phonemes {
@@ -275,6 +281,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     setState(() {
       _attempts.add(result);
       _lastScore = score;
+      _weakest = worst?.phoneme;
       _practice = practice;
       _soundWon = null;
       _step = _Step.feedback;
@@ -287,6 +294,12 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   void _tryAgain() {
     setState(() => _soundWon = null);
     _goTo(_Step.tryIt);
+  }
+
+  /// After a miss with no lip check for the sound: the coach shows it.
+  void _watchWeakest() {
+    setState(() => _focusPhoneme = _weakest);
+    _goTo(_Step.watch);
   }
 
   // -------------------------
@@ -423,6 +436,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
         StepperBar(
           steps: _stepLabels,
           current: _step.index,
+          locked: {if (!_missed) _Step.watch.index},
           onStepTap: (i) {
             // feedback only makes sense once there's an attempt
             if (i == _Step.feedback.index && _attempts.isEmpty) return;
@@ -546,9 +560,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
             ),
             const SizedBox(height: AppSpace.s),
             SecondaryButton(
-              label: 'Next: Watch',
+              label: 'Next: Try',
               expand: true,
-              onPressed: () => _goTo(_Step.watch),
+              onPressed: () => _goTo(_Step.tryIt),
             ),
           ],
         );
@@ -627,13 +641,13 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
                 )
               else
                 PrimaryButton(
-                  label: 'Try again',
-                  icon: Icons.replay_rounded,
+                  label: 'Watch the coach',
+                  icon: Icons.face_retouching_natural_rounded,
                   expand: true,
-                  onPressed: _tryAgain,
+                  onPressed: _watchWeakest,
                 ),
               const SizedBox(height: AppSpace.s),
-              if (practice != null && !_outOfTries) ...[
+              if (!_outOfTries) ...[
                 SecondaryButton(
                   label: 'Try the word again',
                   expand: true,
