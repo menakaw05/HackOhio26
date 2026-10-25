@@ -124,7 +124,7 @@ class _GrownupsScreenState extends State<GrownupsScreen> {
         ),
         const SizedBox(height: AppSpace.xl),
         Text(
-          'mirrorU is a practice aid that works alongside a speech-language pathologist. '
+          'echo-me is a practice aid that works alongside a speech-language pathologist. '
           'It does not diagnose or treat speech conditions.',
           style: AppText.caption,
           textAlign: TextAlign.center,

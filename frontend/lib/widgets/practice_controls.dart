@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'feedback_banner.dart';
 import 'motion.dart';
+import 'ocean.dart';
 
 /// Big round mic button with a gentle pulse while listening.
 class MicButton extends StatefulWidget {
@@ -50,6 +51,7 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final onPressed = widget.onPressed;
     final color = widget.listening ? AppColors.lotus : AppColors.lake;
+    final face = onPressed == null ? AppColors.inkFaint : color;
     return Semantics(
       button: true,
       label: widget.listening ? 'Stop listening' : 'Start talking',
@@ -58,29 +60,36 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // expanding, fading ring behind the button
+            // bubble ripples spreading out behind the button
             AnimatedBuilder(
               animation: _pulse,
-              builder: (context, _) => _pulse.value == 0
+              builder: (context, _) => !_pulse.isAnimating
                   ? const SizedBox.shrink()
-                  : Container(
-                      width: AppSize.micButton * (1 + 0.5 * _pulse.value),
-                      height: AppSize.micButton * (1 + 0.5 * _pulse.value),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color.withValues(alpha: 0.35 * (1 - _pulse.value)),
-                      ),
+                  : Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        for (final lag in [0.0, 0.5]) _ripple(color, (_pulse.value + lag) % 1),
+                      ],
                     ),
             ),
             PressScale(
               enabled: onPressed != null,
-              child: SizedBox.square(
-                dimension: AppSize.micButton,
+              child: Container(
+                width: AppSize.micButton,
+                height: AppSize.micButton,
+                // a big candy button: white rim, darker edge underneath, soft glow
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 5),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.edgeOf(face), offset: const Offset(0, 7)),
+                    BoxShadow(color: face.withValues(alpha: 0.45), blurRadius: 28, spreadRadius: 4),
+                  ],
+                ),
                 child: Material(
                   shape: const CircleBorder(),
-                  color: onPressed == null ? AppColors.inkFaint : color,
-                  elevation: 4,
-                  shadowColor: AppColors.shadow,
+                  color: face,
+                  clipBehavior: Clip.antiAlias,
                   child: InkWell(
                     customBorder: const CircleBorder(),
                     onTap: onPressed == null
@@ -89,10 +98,31 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
                             AppHaptics.tap();
                             onPressed();
                           },
-                    child: Icon(
-                      widget.listening ? Icons.stop_rounded : Icons.mic_rounded,
-                      color: Colors.white,
-                      size: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          widget.listening ? Icons.stop_rounded : Icons.mic_rounded,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                        // a bubble's shine
+                        Positioned(
+                          left: 18,
+                          top: 14,
+                          child: Transform.rotate(
+                            angle: -0.6,
+                            child: Container(
+                              width: 22,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.55),
+                                borderRadius: AppRadius.pillRadius,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -104,6 +134,15 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
     );
   }
 }
+
+Widget _ripple(Color color, double v) => Container(
+      width: AppSize.micButton * (1 + 0.6 * v),
+      height: AppSize.micButton * (1 + 0.6 * v),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.7 * (1 - v)), width: 4),
+      ),
+    );
 
 /// Hear → Watch → Try → Feedback.
 class StepperBar extends StatelessWidget {
@@ -142,11 +181,11 @@ class StepperBar extends StatelessWidget {
                     children: [
                       AnimatedContainer(
                         duration: AppMotion.medium,
-                        height: 6,
+                        height: 12,
                         decoration: BoxDecoration(
-                          color: i <= current && !locked.contains(i)
-                              ? AppColors.lake
-                              : AppColors.lakeMist,
+                          color: i == current
+                              ? AppColors.lotus
+                              : (i < current && !locked.contains(i) ? AppColors.lake : AppColors.lakeMist),
                           borderRadius: AppRadius.pillRadius,
                         ),
                       ),
@@ -172,7 +211,7 @@ class StepperBar extends StatelessWidget {
   }
 }
 
-/// One dot per attempt, colored by how it went; empty dots are attempts left.
+/// One starfish per attempt, colored by how it went; empty ones are attempts left.
 class AttemptDots extends StatelessWidget {
   const AttemptDots({super.key, required this.total, required this.results});
 
@@ -186,19 +225,12 @@ class AttemptDots extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // a starfish per try: gold when it was great, the result's color otherwise
           for (var i = 0; i < total; i++)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: i < results.length ? results[i].color : null,
-                border: Border.all(
-                  color: i < results.length ? results[i].color : AppColors.inkFaint,
-                  width: 2,
-                ),
-              ),
+            Starfish(
+              color: i >= results.length
+                  ? null
+                  : (results[i] == FeedbackKind.success ? AppColors.sun : results[i].color),
             ),
         ],
       ),

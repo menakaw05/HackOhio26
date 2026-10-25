@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// mirrorU palette: a lotus on a lake. Teals and blue-greens for the water, lotus pinks for
+/// echo-me palette: a lotus on a lake. Teals and blue-greens for the water, lotus pinks for
 /// warmth. Feedback colors never use red for a child's attempt.
 abstract final class AppColors {
   // brand
@@ -14,6 +14,8 @@ abstract final class AppColors {
   static const lilyPadSoft = Color(0xFFE0F3EA);
   static const sky = Color(0xFF4A8FD6);
   static const skySoft = Color(0xFFE2EEFB);
+  static const sun = Color(0xFFFFC94D); // the lotus's golden center: stars and rewards
+  static const sunDeep = Color(0xFFE0A21B);
 
   // neutrals
   static const ink = Color(0xFF15333B);
@@ -34,6 +36,9 @@ abstract final class AppColors {
 
   // learner avatar backgrounds
   static const avatarPalette = [lake, lotus, sky, lilyPad, Color(0xFF9B7FD4)];
+
+  /// The darker "edge" under a 3D button, tile or card of this color.
+  static Color edgeOf(Color face) => Color.lerp(face, const Color(0xFF0B2F35), 0.28)!;
 }
 
 abstract final class AppGradients {
@@ -57,9 +62,11 @@ abstract final class AppGradients {
     colors: [Color(0xFFF59BBE), Color(0xFFE1679A)],
   );
 
-  static const stage = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFE6F6F4), Color(0xFFFCE9F1)],
+  /// The avatar's stage: a pond, light in the middle, deeper blue at the edges.
+  static const stage = RadialGradient(
+    center: Alignment(0, -0.3),
+    radius: 1.1,
+    colors: [Color(0xFFE6F6F4), Color(0xFF6CC4C0), Color(0xFF2F86C8)],
+    stops: [0, 0.6, 1],
   );
 }

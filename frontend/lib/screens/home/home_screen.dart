@@ -35,13 +35,13 @@ class HomeScreen extends StatelessWidget {
     final improving = state.trends.where((t) => t.weekly.last > t.weekly.first).length;
 
     return Scaffold(
-      body: SafeArea(
+      body: OceanBackdrop(child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.s, AppSpace.page, AppSpace.xxl),
           children: [
             Row(
               children: [
-                MirrorULogo(size: 22, onLongPress: () => showDebugMenu(context)),
+                EchoLogo(size: 22, onLongPress: () => showDebugMenu(context)),
                 const Spacer(),
                 Tooltip(
                   message: 'Switch learner',
@@ -90,8 +90,8 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: StatTile(
-                    icon: Icons.local_fire_department_rounded,
-                    color: AppColors.lotus,
+                    icon: Icons.waves_rounded,
+                    color: AppColors.sky,
                     value: '${learner.streak}',
                     label: 'day streak',
                   ),
@@ -145,7 +145,7 @@ class HomeScreen extends StatelessWidget {
               ),
           ],
         ),
-      ),
+      )),
     );
   }
 }
@@ -165,11 +165,24 @@ class _ContinueCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(word == null ? "Let's get started" : 'Up next',
-              style: AppText.bodyStrong.copyWith(color: Colors.white70)),
-          const SizedBox(height: AppSpace.xs),
-          Text(word?.text ?? 'Find your sounds',
-              style: AppText.wordHero.copyWith(color: Colors.white, fontSize: 44)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(word == null ? "Let's get started" : 'Up next',
+                        style: AppText.bodyStrong.copyWith(color: Colors.white70)),
+                    const SizedBox(height: AppSpace.xs),
+                    Text(word?.text ?? 'Find your sounds',
+                        style: AppText.wordHero.copyWith(color: Colors.white, fontSize: 44)),
+                  ],
+                ),
+              ),
+              const BelugaBuddy(size: 96),
+            ],
+          ),
           if (word != null) ...[
             const SizedBox(height: AppSpace.s),
             SourceChip(
@@ -198,7 +211,7 @@ class _QueueWordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 156,
+      width: 176,
       child: AppCard(
         semanticLabel: 'Practice ${word.text}',
         onTap: () => context.push(Routes.wordPractice(word.text, source: word.source)),

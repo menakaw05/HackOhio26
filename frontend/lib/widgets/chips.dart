@@ -19,31 +19,52 @@ class SoundChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = kind?.color ?? AppColors.lakeDeep;
+    final color = kind?.color ?? AppColors.lake;
     final background = selected ? color : (kind?.softColor ?? AppColors.lakeMist);
     return Semantics(
       button: onTap != null,
       selected: selected,
       label: 'Sound $phoneme',
+      // a bubble: round, rimmed, with a shine
       child: Material(
         color: background,
-        borderRadius: AppRadius.chipRadius,
+        shape: StadiumBorder(
+          side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.55), width: 2.5),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: AppRadius.chipRadius,
           onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-                minWidth: AppSize.minTouch, minHeight: AppSize.minTouch),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.m),
-              child: Center(
-                widthFactor: 1,
-                child: Text(
-                  '/$phoneme/',
-                  style: AppText.section.copyWith(color: selected ? Colors.white : color),
+          child: Stack(
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 58, minHeight: 58),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.m),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Text(
+                      '/$phoneme/',
+                      style: AppText.section.copyWith(color: selected ? Colors.white : color),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                left: 11,
+                top: 9,
+                child: Transform.rotate(
+                  angle: -0.6,
+                  child: Container(
+                    width: 13,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      borderRadius: AppRadius.pillRadius,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -104,7 +125,7 @@ class TagBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.s, vertical: 2),
       decoration: BoxDecoration(color: background, borderRadius: AppRadius.pillRadius),
       child: Text(label,
-          style: AppText.caption.copyWith(color: color),
+          style: AppText.caption.copyWith(color: color, fontSize: 12.5),
           maxLines: 1,
           overflow: TextOverflow.ellipsis),
     );

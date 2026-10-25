@@ -401,14 +401,16 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
 
     final header = Row(
       children: [
-        Flexible(
-          child: SourceChip(
-            label: _word.source.label,
-            icon: _word.source.icon,
-            when: relativeDay(_word.addedAt),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SourceChip(
+              label: _word.source.label,
+              icon: _word.source.icon,
+              when: relativeDay(_word.addedAt),
+            ),
           ),
         ),
-        const Spacer(),
         AttemptDots(
           total: _maxAttempts,
           results: [for (final a in _attempts) a.kind],
@@ -518,12 +520,15 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   Widget _coachView() {
     final url = _services.coachUrl;
     if (url == null) {
-      return ComingSoon(
-        label: 'Your avatar coach',
-        icon: Icons.face_retouching_natural_rounded,
-        height: null,
-        // no room for it beside the camera
-        detail: _cameraOn ? null : 'Says the word and shows the mouth shape.',
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.m),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.face_retouching_natural_rounded, color: AppColors.lakeDeep, size: 40),
+            Text('Your avatar coach', style: AppText.caption.copyWith(color: AppColors.lakeDeep)),
+          ]),
+        ),
       );
     }
     return IgnorePointer(
@@ -536,8 +541,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     if (camera == null) {
       return Center(
         child: _cameraFailed
-            ? Text('No camera on this device.', style: AppText.caption)
-            : const CircularProgressIndicator(),
+            ? Text('No camera on this device.',
+                style: AppText.caption.copyWith(color: Colors.white70), textAlign: TextAlign.center)
+            : const CircularProgressIndicator(color: Colors.white),
       );
     }
     return Center(
@@ -753,17 +759,20 @@ class _AvatarStage extends StatelessWidget {
   Widget build(BuildContext context) {
     final camera = this.camera;
     return Container(
+      // a pond, with the coach looking out of a porthole
       decoration: const BoxDecoration(
         gradient: AppGradients.stage,
         borderRadius: AppRadius.cardRadius,
+        border: Border.fromBorderSide(BorderSide(color: AppColors.lakeDeep, width: 2.5)),
+        boxShadow: AppShadows.soft,
       ),
       padding: const EdgeInsets.all(AppSpace.m),
       child: camera == null
-          ? coach
+          ? Center(child: Porthole(child: coach))
           : Flex(
               direction: vertical ? Axis.vertical : Axis.horizontal,
               children: [
-                Expanded(child: coach),
+                Expanded(child: Center(child: Porthole(child: coach))),
                 const SizedBox(width: AppSpace.s, height: AppSpace.s),
                 Expanded(child: camera),
               ],

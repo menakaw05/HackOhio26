@@ -200,6 +200,7 @@ void main() {
     expect(state.queue.isEmpty, isTrue);
     await tester.scrollUntilVisible(find.text('Add to my practice'), 300,
         scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle(); // let the final scroll lay out before tapping
     await tester.tap(find.text('Add to my practice'));
     await tester.pumpAndSettle();
     expect(state.queue.isEmpty, isFalse);
@@ -294,14 +295,14 @@ void main() {
     state.queue.next();
     final shortened = state.queue.length;
 
-    await tester.longPress(find.byType(MirrorULogo));
+    await tester.longPress(find.byType(EchoLogo));
     await tester.pumpAndSettle();
     expect(find.text('Debug menu'), findsOneWidget);
     await tester.tap(find.text('Reset sample data'));
     await tester.pumpAndSettle();
     expect(state.queue.length, shortened + 1);
 
-    await tester.longPress(find.byType(MirrorULogo));
+    await tester.longPress(find.byType(EchoLogo));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Look & Say'), 200,
         scrollable: find.byType(Scrollable).last);

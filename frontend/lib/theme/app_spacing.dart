@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_colors.dart';
 
 /// Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48.
 abstract final class AppSpace {
@@ -15,8 +16,8 @@ abstract final class AppSpace {
 }
 
 abstract final class AppRadius {
-  static const double card = 22;
-  static const double chip = 12;
+  static const double card = 28;
+  static const double chip = 16;
   static const double pill = 999;
 
   static const cardRadius = BorderRadius.all(Radius.circular(card));
@@ -27,7 +28,7 @@ abstract final class AppRadius {
 abstract final class AppSize {
   static const double minTouch = 48;
   static const double primaryButton = 56;
-  static const double micButton = 88;
+  static const double micButton = 96;
   static const double avatar = 44;
 
   /// Width at which the shell switches from bottom navigation to a sidebar.
@@ -35,8 +36,9 @@ abstract final class AppSize {
 }
 
 abstract final class AppShadows {
+  /// A hard shadow under cards, so they look like stickers.
   static const soft = [
-    BoxShadow(color: Color(0x1A0E5E66), blurRadius: 18, offset: Offset(0, 6)),
+    BoxShadow(color: AppColors.lakeDeep, offset: Offset(0, 5)),
   ];
 }
 
