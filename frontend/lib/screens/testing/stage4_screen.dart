@@ -19,7 +19,10 @@ import '../../widgets/widgets.dart';
 
 // avatar-web dev server, e.g. through a tunnel:
 //   flutter run --dart-define=AVATAR_URL=https://<tunnel>.trycloudflare.com
-const _avatarUrl = String.fromEnvironment('AVATAR_URL', defaultValue: 'http://localhost:5173');
+const _avatarUrl = String.fromEnvironment(
+  'AVATAR_URL',
+  defaultValue: 'http://localhost:5173',
+);
 const _avatarConfigured = bool.hasEnvironment('AVATAR_URL');
 
 /// Stage 4 test screen: the avatar says a word sound by sound and waits; the learner copies
@@ -116,11 +119,15 @@ class _Stage4ScreenState extends State<Stage4Screen> {
     final file = await log.writeFile();
     if (!buttonContext.mounted) return;
     final box = buttonContext.findRenderObject() as RenderBox?;
-    await SharePlus.instance.share(ShareParams(
-      files: [XFile(file.path, mimeType: 'application/json')],
-      subject: 'mirrorU stage 4 session: ${log.word}',
-      sharePositionOrigin: box == null ? null : box.localToGlobal(Offset.zero) & box.size,
-    ));
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'application/json')],
+        subject: 'mirrorU stage 4 session: ${log.word}',
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
+      ),
+    );
   }
 
   void _advance() {
@@ -172,8 +179,9 @@ class _Stage4ScreenState extends State<Stage4Screen> {
       _log!.event(_tracker.nowMs, session.phase.name, index: session.index);
       if (_useAvatar) {
         final pauses = jsonEncode([for (final s in steps) s.pauseAtSeconds]);
-        await _avatarKey.currentState?.controller
-            .runJavaScript('window.sayStepwise(${jsonEncode(word)}, $pauses);');
+        await _avatarKey.currentState?.controller.runJavaScript(
+          'window.sayStepwise(${jsonEncode(word)}, $pauses);',
+        );
       }
       _updateStatus();
     } catch (e) {
@@ -208,9 +216,12 @@ class _Stage4ScreenState extends State<Stage4Screen> {
       _status = switch (s.phase) {
         FollowPhase.idle => null,
         FollowPhase.coach => 'Watch the coach…',
-        FollowPhase.waiting => _manual
-            ? 'Say /${s.current!.phoneme}/, then tap Next sound.'
-            : 'Your turn: say /${s.current!.phoneme}/ like the coach.',
+        FollowPhase.waiting =>
+          _manual
+              ? 'Say /${s.current!.phoneme}/, then tap Next sound.'
+              : s.autoPassing
+              ? 'Say /${s.current!.phoneme}/. It\'s hard to see on the lips, so it passes on its own.'
+              : 'Your turn: say /${s.current!.phoneme}/ like the coach.',
         FollowPhase.passed => 'Great!',
         FollowPhase.done => 'All sounds done!',
       };
@@ -220,7 +231,8 @@ class _Stage4ScreenState extends State<Stage4Screen> {
   @override
   Widget build(BuildContext context) {
     final session = _session;
-    final running = session != null &&
+    final running =
+        session != null &&
         session.phase != FollowPhase.idle &&
         session.phase != FollowPhase.done;
     final step = session?.current;
@@ -248,7 +260,10 @@ class _Stage4ScreenState extends State<Stage4Screen> {
             PrimaryButton(
               label: running ? 'Restart' : 'Start',
               icon: Icons.play_arrow_rounded,
-              onPressed: _matcher == null || _loadingSteps || _cameraReady != true ? null : _start,
+              onPressed:
+                  _matcher == null || _loadingSteps || _cameraReady != true
+                  ? null
+                  : _start,
             ),
           ],
         ),
@@ -257,7 +272,9 @@ class _Stage4ScreenState extends State<Stage4Screen> {
           title: Text('Use avatar', style: AppText.bodyStrong),
           subtitle: Text(
             _useAvatar
-                ? (_avatarReady ? 'Avatar ready' : 'Loading avatar from $_avatarUrl')
+                ? (_avatarReady
+                      ? 'Avatar ready'
+                      : 'Loading avatar from $_avatarUrl')
                 : 'Step through the sounds without the avatar',
             style: AppText.caption,
           ),
@@ -266,7 +283,10 @@ class _Stage4ScreenState extends State<Stage4Screen> {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text('Manual (record for debugging)', style: AppText.bodyStrong),
+          title: Text(
+            'Manual (record for debugging)',
+            style: AppText.bodyStrong,
+          ),
           subtitle: Text(
             "Sounds don't auto-pass; tap Next sound after each correct attempt. "
             'Every frame is logged for export.',
@@ -286,7 +306,9 @@ class _Stage4ScreenState extends State<Stage4Screen> {
             label: 'Next sound',
             icon: Icons.skip_next_rounded,
             expand: true,
-            onPressed: session.phase == FollowPhase.waiting ? _manualNext : null,
+            onPressed: session.phase == FollowPhase.waiting
+                ? _manualNext
+                : null,
           ),
         ],
         if (_log != null) ...[
@@ -310,18 +332,28 @@ class _Stage4ScreenState extends State<Stage4Screen> {
               for (var i = 0; i < session.steps.length; i++)
                 SoundChip(
                   phoneme: session.steps[i].phoneme,
-                  kind: i < session.index ||
-                          (i == session.index && session.phase == FollowPhase.passed) ||
+                  kind:
+                      i < session.index ||
+                          (i == session.index &&
+                              session.phase == FollowPhase.passed) ||
                           session.phase == FollowPhase.done
                       ? FeedbackKind.success
                       : (i == session.index ? FeedbackKind.almost : null),
-                  selected: i == session.index && session.phase == FollowPhase.waiting,
+                  selected:
+                      i == session.index &&
+                      session.phase == FollowPhase.waiting,
                 ),
             ],
           ),
         ],
         const SectionHeader(title: 'Tuning'),
-        _ScoreBar(score: session?.score ?? 0, threshold: _threshold),
+        _ScoreBar(
+          score: session?.score ?? 0,
+          threshold: _threshold,
+          autoPass:
+              session?.autoPassing == true &&
+              session?.phase == FollowPhase.waiting,
+        ),
         Slider(
           value: _threshold,
           min: 0.1,
@@ -333,8 +365,11 @@ class _Stage4ScreenState extends State<Stage4Screen> {
             session?.threshold = v;
           }),
         ),
-        Text('Window: last ${_windowSeconds.toStringAsFixed(2)} s', style: AppText.caption,
-            textAlign: TextAlign.center),
+        Text(
+          'Window: last ${_windowSeconds.toStringAsFixed(2)} s',
+          style: AppText.caption,
+          textAlign: TextAlign.center,
+        ),
         Slider(
           value: _windowSeconds,
           min: 0.5,
@@ -356,13 +391,20 @@ class _Stage4ScreenState extends State<Stage4Screen> {
 
   /// Both charts on the matcher's own scale (z-units, ±3), so stillness looks flat and the
   /// two are directly comparable. Golden shows the take that's actually closest.
-  List<Widget> _charts(MouthMatcher matcher, String ipa, List<List<double>> window) {
+  List<Widget> _charts(
+    MouthMatcher matcher,
+    String ipa,
+    List<List<double>> window,
+  ) {
     const lo = -3.0, hi = 3.0;
     final takes = _golden?[ipa] ?? const <List<List<double>>>[];
     final closest = matcher.closestTemplate(ipa, window);
     final shown = closest ?? 0;
     return [
-      Text('You (last ${_windowSeconds.toStringAsFixed(2)} s)', style: AppText.caption),
+      Text(
+        'You (last ${_windowSeconds.toStringAsFixed(2)} s)',
+        style: AppText.caption,
+      ),
       const SizedBox(height: AppSpace.xs),
       TrajectoryChart(series: matcher.normalized(window), min: lo, max: hi),
       const SizedBox(height: AppSpace.s),
@@ -370,7 +412,7 @@ class _Stage4ScreenState extends State<Stage4Screen> {
         takes.isEmpty
             ? 'No golden data for /$ipa/'
             : 'Golden /$ipa/: ${closest == null ? 'take 1' : 'closest take, ${shown + 1} of ${takes.length}'} '
-                '(others faint)',
+                  '(others faint)',
         style: AppText.caption,
       ),
       const SizedBox(height: AppSpace.xs),
@@ -385,8 +427,10 @@ class _Stage4ScreenState extends State<Stage4Screen> {
           max: hi,
         ),
       const SizedBox(height: AppSpace.s),
-      Text('Scale: standard deviations from your golden average (0 = middle line).',
-          style: AppText.caption),
+      Text(
+        'Scale: standard deviations from your golden average (0 = middle line).',
+        style: AppText.caption,
+      ),
       const SizedBox(height: AppSpace.xs),
       const FeatureLegend(),
     ];
@@ -403,7 +447,9 @@ class _Stage4ScreenState extends State<Stage4Screen> {
         border: Border.all(color: boxColor, width: 6),
       ),
       child: ClipRRect(
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.card - 6)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.card - 6),
+        ),
         child: Stack(
           children: [
             Positioned.fill(
@@ -414,8 +460,10 @@ class _Stage4ScreenState extends State<Stage4Screen> {
                       onMessage: _onAvatarMessage,
                     )
                   : Center(
-                      child: Text(step == null ? 'Ready' : '/${step.phoneme}/',
-                          style: AppText.wordHero),
+                      child: Text(
+                        step == null ? 'Ready' : '/${step.phoneme}/',
+                        style: AppText.wordHero,
+                      ),
                     ),
             ),
             Positioned(
@@ -428,9 +476,9 @@ class _Stage4ScreenState extends State<Stage4Screen> {
                 child: switch (_cameraReady) {
                   true when controller != null => CameraPreview(controller),
                   false => const ColoredBox(
-                      color: AppColors.lakeMist,
-                      child: Center(child: Icon(Icons.videocam_off_rounded)),
-                    ),
+                    color: AppColors.lakeMist,
+                    child: Center(child: Icon(Icons.videocam_off_rounded)),
+                  ),
                   _ => const ColoredBox(color: AppColors.lakeMist),
                 },
               ),
@@ -444,14 +492,21 @@ class _Stage4ScreenState extends State<Stage4Screen> {
 
 /// Live score with the threshold marked.
 class _ScoreBar extends StatelessWidget {
-  const _ScoreBar({required this.score, required this.threshold});
+  const _ScoreBar({
+    required this.score,
+    required this.threshold,
+    this.autoPass = false,
+  });
 
   final double score;
   final double threshold;
 
+  /// Barely-visible sound: the bar is time until it passes on its own, not a match score.
+  final bool autoPass;
+
   @override
   Widget build(BuildContext context) {
-    final passing = score >= threshold;
+    final passing = autoPass || score >= threshold;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -468,18 +523,21 @@ class _ScoreBar extends StatelessWidget {
                   backgroundColor: AppColors.lakeMist,
                 ),
               ),
-              Positioned(
-                left: constraints.maxWidth * threshold - 1,
-                top: -4,
-                bottom: -4,
-                child: Container(width: 2, color: AppColors.ink),
-              ),
+              if (!autoPass)
+                Positioned(
+                  left: constraints.maxWidth * threshold - 1,
+                  top: -4,
+                  bottom: -4,
+                  child: Container(width: 2, color: AppColors.ink),
+                ),
             ],
           ),
         ),
         const SizedBox(height: AppSpace.xs),
         Text(
-          'score ${score.toStringAsFixed(2)} · threshold ${threshold.toStringAsFixed(2)}',
+          autoPass
+              ? 'hard to see on the lips: passes on its own (${(score * 100).round()}%)'
+              : 'score ${score.toStringAsFixed(2)} · threshold ${threshold.toStringAsFixed(2)}',
           style: AppText.caption,
           textAlign: TextAlign.center,
         ),

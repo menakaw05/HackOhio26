@@ -128,4 +128,47 @@ void main() {
     expect((logged.last as Map).containsKey('f'), isFalse);
     expect((json['config'] as Map)['trimFraction'], matcher.config.trimFraction);
   });
+
+  test('barely-visible sounds pass on their own after their usual duration', () {
+    expect(
+      [for (final p in matcher.phonemes) if (matcher.barelyVisible(p)) p]..sort(),
+      (['ŋ', 't', 'z', 'ð', 'l', 'ʒ', 'd', 'n', 'ʃ']..sort()),
+    );
+    final wait = matcher.typicalDuration('t')!.inMilliseconds;
+    expect(wait, inInclusiveRange(600, 1300));
+
+    // still face on /t/ (the third sound of "boot")
+    final s = FollowAlongSession(matcher: matcher, steps: steps, useAvatar: false)..start();
+    s
+      ..manualPass()
+      ..advance()
+      ..manualPass()
+      ..advance();
+    expect(s.current!.phoneme, 't');
+    expect(s.autoPassing, isTrue);
+    final rest = golden['t']!.first.first;
+    var passedAt = -1;
+    for (var t = 0; t <= wait + 200; t += 42) {
+      if (s.addFrame(MouthFrame(t: t, features: rest, contours: const {}))) passedAt = t;
+    }
+    expect(passedAt, greaterThanOrEqualTo(wait));
+    expect(passedAt, lessThan(wait + 84));
+
+    // manual (debug) mode never auto-passes
+    final manual = FollowAlongSession(
+        matcher: matcher, steps: const [FollowStep('t', 0, 100)], useAvatar: false, autoPass: false)
+      ..start();
+    for (var t = 0; t <= wait * 2; t += 42) {
+      expect(manual.addFrame(MouthFrame(t: t, features: rest, contours: const {})), isFalse);
+    }
+    expect(manual.phase, FollowPhase.waiting);
+
+    // a visible sound is still matched, not timed
+    final b = FollowAlongSession(matcher: matcher, steps: const [FollowStep('b', 0, 100)], useAvatar: false)
+      ..start();
+    expect(b.autoPassing, isFalse);
+    for (var t = 0; t <= 3000; t += 42) {
+      expect(b.addFrame(MouthFrame(t: t, features: rest, contours: const {})), isFalse);
+    }
+  });
 }

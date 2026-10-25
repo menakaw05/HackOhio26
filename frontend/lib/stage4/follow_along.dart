@@ -75,6 +75,11 @@ class FollowAlongSession extends ChangeNotifier {
   double score = 0;
   final List<MouthFrame> _frames = [];
   int? _aboveSince;
+  int? _waitStartedAt;
+
+  /// The current sound barely shows on the lips, so it passes after its usual duration
+  /// instead of being matched; [score] shows progress toward that.
+  bool get autoPassing => current != null && matcher.barelyVisible(current!.phoneme);
 
   FollowStep? get current => index < steps.length ? steps[index] : null;
 
@@ -111,6 +116,20 @@ class FollowAlongSession extends ChangeNotifier {
     _frames
       ..add(frame)
       ..removeWhere((f) => frame.t - f.t > window.inMilliseconds);
+    _waitStartedAt ??= frame.t;
+
+    if (autoPassing) {
+      final wait = matcher.typicalDuration(step.phoneme)!.inMilliseconds;
+      final elapsed = frame.t - _waitStartedAt!;
+      score = wait == 0 ? 1 : (elapsed / wait).clamp(0, 1);
+      if (autoPass && elapsed >= wait) {
+        phase = FollowPhase.passed;
+        notifyListeners();
+        return true;
+      }
+      notifyListeners();
+      return false;
+    }
 
     // a sound with no golden data can't be checked, so it passes
     score = matcher.hasPhoneme(step.phoneme) ? matcher.score(step.phoneme, windowFeatures) : 1;
@@ -163,6 +182,7 @@ class FollowAlongSession extends ChangeNotifier {
     score = 0;
     _frames.clear();
     _aboveSince = null;
+    _waitStartedAt = null;
   }
 }
 

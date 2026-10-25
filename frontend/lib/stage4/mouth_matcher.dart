@@ -51,6 +51,7 @@ class MatcherConfig {
     this.trimFraction = 0.95,
     this.sigmaPercentile = 0.9,
     this.minMotionRatio = 0.3,
+    this.barelyVisibleBelow = 1.5,
   });
 
   /// Moving-average width in frames.
@@ -70,6 +71,11 @@ class MatcherConfig {
 
   /// A window with less than this share of the sound's usual movement scores 0.
   final double minMotionRatio;
+
+  /// Sounds whose golden takes move the mouth less than this at their peak (z-units from the
+  /// relaxed start) barely show on the lips, mostly tongue sounds like /t/, so stage 4 doesn't
+  /// try to match them.
+  final double barelyVisibleBelow;
 }
 
 class MouthMatcher {
@@ -77,6 +83,13 @@ class MouthMatcher {
 
   static const _trimPad = 2;
   static const _restFrames = 3;
+
+  /// Golden recordings ran at about 24 fps (median measured).
+  static const _goldenFrameMs = 1000 / 24;
+
+  /// Per sound: median peak movement and median movement time over the golden takes.
+  final Map<String, double> _movement = {};
+  final Map<String, Duration> _movementTime = {};
 
   final MatcherConfig config;
 
@@ -89,6 +102,16 @@ class MouthMatcher {
   Iterable<String> get phonemes => _templates.keys;
   bool hasPhoneme(String ipa) => _templates.containsKey(ipa);
   double? sigmaFor(String ipa) => _sigma[ipa];
+
+  /// How far [ipa] moves the mouth at its peak in the golden takes (median, z-units).
+  double? movementOf(String ipa) => _movement[ipa];
+
+  /// True when [ipa] barely shows on the lips (see [MatcherConfig.barelyVisibleBelow]).
+  bool barelyVisible(String ipa) =>
+      (_movement[ipa] ?? double.infinity) < config.barelyVisibleBelow;
+
+  /// How long saying [ipa] takes in the golden takes (median, relaxed to relaxed).
+  Duration? typicalDuration(String ipa) => _movementTime[ipa];
 
   /// Frames in each trimmed template of [ipa] (the movement that gets matched).
   List<int> templateLengths(String ipa) => [for (final t in _templates[ipa] ?? const []) t.seq.length];
@@ -127,6 +150,7 @@ class MouthMatcher {
     }
     for (final ipa in takes.keys) {
       matcher._sigma[ipa] = matcher._calibrate(ipa, takes[ipa]!);
+      matcher._measureMovement(ipa, takes[ipa]!);
     }
     return matcher;
   }
@@ -271,6 +295,29 @@ class MouthMatcher {
     end = math.min(seq.length - 1, end + _trimPad);
     final trimmed = seq.sublist(start, end + 1);
     return _Template(trimmed, _motion(trimmed));
+  }
+
+  /// Median peak distance from the relaxed start, and median time from first to last frame
+  /// above 15% of that peak, over the golden takes of [ipa].
+  void _measureMovement(String ipa, List<List<List<double>>> takes) {
+    final peaks = <double>[], frames = <int>[];
+    for (final take in takes) {
+      final z = normalized(take);
+      final n = math.min(_restFrames, z.length);
+      final rest = List.generate(z.first.length, (d) => [for (var i = 0; i < n; i++) z[i][d]].reduce((a, b) => a + b) / n);
+      final dev = [
+        for (final f in z)
+          math.sqrt([for (var d = 0; d < rest.length; d++) math.pow(f[d] - rest[d], 2)].reduce((a, b) => a + b))
+      ];
+      final peak = dev.reduce(math.max);
+      peaks.add(peak);
+      final start = dev.indexWhere((x) => x > 0.15 * peak);
+      final end = dev.lastIndexWhere((x) => x > 0.15 * peak);
+      frames.add(start < 0 ? 0 : end - start);
+    }
+    double median(List<num> v) => (v.toList()..sort())[v.length ~/ 2].toDouble();
+    _movement[ipa] = median(peaks);
+    _movementTime[ipa] = Duration(milliseconds: (median(frames) * _goldenFrameMs).round());
   }
 
   /// Path length of the mouth shape through feature space: how far the mouth moves in total.

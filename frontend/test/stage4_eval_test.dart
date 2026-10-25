@@ -145,6 +145,7 @@ in a word (0.75 s window, coming from another sound):
   own sound passes:     ${pct(inWordPass, total)}
   other sounds pass:    ${pct(inWordOther, inWordOtherTotal)}
 still face passes:      ${pct(stillPass, total)}
+auto-passed (barely visible on the lips): ${[for (final p in phonemes) if (matcher.barelyVisible(p)) '/$p/'].join(' ')}
 own score quartiles:    ${[0.25, 0.5, 0.75].map((q) => genuineScores[((genuineScores.length - 1) * q).round()].toStringAsFixed(2)).join(' / ')}
 top confusions:         ${topConfusions.take(12).map((e) => '${e.key}×${e.value}').join(', ')}
 ''');
