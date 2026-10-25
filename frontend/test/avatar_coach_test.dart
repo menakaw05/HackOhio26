@@ -43,14 +43,6 @@ void main() {
     expect(boostFor('ɹ', 1.4), isEmpty);
   });
 
-  test('touch-your-throat cue only for voicing swaps', () {
-    expect(voicingCue(_p('b', 40, ['p'])), contains('should buzz'));
-    expect(voicingCue(_p('p', 40, ['b'])), contains('just air'));
-    expect(voicingCue(_p('p', 40, ['p'])), isNull);
-    expect(voicingCue(_p('p', 40, ['t'])), isNull);
-    expect(voicingCue(_p('p', 40)), isNull);
-  });
-
   PAResult result(List<PhonemeAssessment> phonemes, {double accuracy = 0}) => PAResult(
         recognizedText: '',
         accuracyScore: accuracy,
@@ -72,7 +64,7 @@ void main() {
   test('single sounds are said like a teacher would', () {
     expect(soundPromptFor('p'), (text: 'puh', ipa: 'pʌ'));
     expect(soundPromptFor('s'), (text: 'sss', ipa: 'sss'));
-    expect(soundPromptFor('u'), (text: 'too', ipa: 'u'));
+    expect(soundPromptFor('u'), (text: 'oo', ipa: 'u'));
     expect(soundPromptFor('?'), (text: '?', ipa: '?'));
   });
 
@@ -84,7 +76,7 @@ void main() {
     // no vowel beside it: the sound on its own
     expect(soundPromptFor('s', after: 't'), (text: 'sss', ipa: 'sss'));
     // vowels are practiced on their own
-    expect(soundPromptFor('u', before: 'b', after: 't'), (text: 'too', ipa: 'u'));
+    expect(soundPromptFor('u', before: 'b', after: 't'), (text: 'oo', ipa: 'u'));
   });
 
   test('finds the sounds around the trouble sound', () {
@@ -92,15 +84,5 @@ void main() {
     final r = result([p1, a, p2]);
     expect(neighbors(r, p1), (before: null, after: 'ɑ'));
     expect(neighbors(r, p2), (before: 'ɑ', after: null));
-  });
-
-  test('scores only the target sound, ignoring the added vowel', () {
-    // "puh" said with a good /p/ and a mumbled "uh"
-    expect(soundScore(result([_p('p', 85), _p('ʌ', 20)]), 'p'), 85);
-    // best occurrence: the child says the sound once
-    expect(soundScore(result([_p('s', 30), _p('s', 70)]), 's'), 70);
-    // Azure didn't line the sound up: fall back to overall accuracy
-    expect(soundScore(result([_p('t', 60)], accuracy: 42), 'p'), 42);
-    expect(bestPhoneme(result([_p('t', 60)]), 'p'), isNull);
   });
 }

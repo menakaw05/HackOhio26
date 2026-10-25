@@ -164,6 +164,12 @@ class _PracticePageState extends State<PracticePage> {
       _afterPhonemeDecision("I couldn't hear that clearly.");
       return;
     }
+    // Sound practice is judged by the lip models, so it's only for sounds
+    // that have one (/p/, /æ/, /u/); otherwise retry the word.
+    if (!PhonemeQualityModel.hasModelFor(worst.phoneme)) {
+      _afterPhonemeDecision(azureFeedbackFor(worst));
+      return;
+    }
 
     // practice the sound where it sits in the word: "pah" for the first p in "pop"
     final around = neighbors(result, worst);
@@ -189,11 +195,10 @@ class _PracticePageState extends State<PracticePage> {
   }
 
   // -------------------------
-  // SOUND attempt (stages 2 and 3): just the trouble sound, voice + camera
+  // SOUND attempt (stages 2 and 3): just the trouble sound, camera only
   // -------------------------
   Future<void> _togglePhonemeAttempt() async {
     if (_isRecording) {
-      final file = await _speechController.onStopClicked();
       final frameCount = _faceCamera.frameCount;
       final faceJson = await _faceCamera.stopFaceStream();
       setState(() {
@@ -201,79 +206,53 @@ class _PracticePageState extends State<PracticePage> {
         _lastFaceJson = faceJson;
         _lastFaceFrameCount = frameCount;
       });
-      if (file != null) await _assessSound(file);
+      await _judgeSound();
     } else {
       await _tts.stop();
-      if (!mounted) return;
-      final started = await _speechController.onStartClicked(context);
-      if (started) await _faceCamera.startFaceStream();
+      await _faceCamera.startFaceStream();
       setState(() {
-        _isRecording = started;
-        if (started) {
-          _feedback = null;
-          _error = null;
-          _lastFaceFrameCount = null;
-        }
+        _isRecording = true;
+        _feedback = null;
+        _error = null;
+        _lastFaceFrameCount = null;
       });
     }
   }
 
-  /// Judges a single-sound attempt the way eLEXir's ice bridges game does:
-  /// Azure scores the recording against the sound's spelling ("puh"), using
-  /// only the target sound's score, and passes at 50. For sounds with a lip
-  /// model (/p/, /æ/, /u/) the lips must also look right, and the model's tip
-  /// explains a miss. A miss in stage 2 moves on to the avatar demo (stage 3);
-  /// in stage 3 the avatar demonstrates again, with no cap on tries.
-  Future<void> _assessSound(File file) async {
+  /// Judges a sound attempt with the ONNX lip model alone: the model's correct
+  /// label (GOOD / APPLE / OO) passes, any other label gives its tip. A miss in
+  /// stage 2 moves on to the avatar demo; in stage 3 the avatar demonstrates
+  /// again, with no cap on tries.
+  Future<void> _judgeSound() async {
     final target = _targetPhoneme;
     if (target == null) return;
-    setState(() => _isAssessing = true);
-    try {
-      final result = await _speechController.assess(
-          file, _prompt.text, GradingLevel.phoneme);
-      final score = soundScore(result, target.phoneme);
-      final lipTip = await _faceModelFeedback(target.phoneme);
-      setState(() {
-        _result = result;
-        _demoAccuracy = score;
-        if (_mode == PracticeMode.demo) _demoTry += 1;
-      });
+    final tip = await _faceModelFeedback(target.phoneme);
+    if (tip == null) {
+      const retry = "I couldn't see your mouth. Keep your face in the camera and try again.";
+      setState(() => _feedback = retry);
+      _tts.speak(retry);
+      return;
+    }
+    setState(() {
+      // the share of frames the model judged correct stands in for accuracy
+      _demoAccuracy = _model.lastCorrectFraction * 100;
+      if (_mode == PracticeMode.demo) _demoTry += 1;
+    });
 
-      if (score >= soundPassScore && lipTip == null) {
-        _afterPhonemeDecision('You got the /${target.phoneme}/ sound!');
-        return;
-      }
-
-      final attempt = bestPhoneme(result, target.phoneme);
-      final cue = lipTip ??
-          (attempt == null
-              ? "I couldn't hear the /${target.phoneme}/ sound."
-              : voicingCue(attempt) ?? azureFeedbackFor(attempt));
-      // Only the short tip is spoken (the full one is on screen), so the coach
-      // starts sooner.
-      final heard = (attempt?.nBestPhonemes.isNotEmpty ?? false)
-          ? attempt!.nBestPhonemes.first.phoneme
-          : null;
-      final spoken = lipTip ??
-          (attempt == null ? null : voicingCue(attempt)) ??
-          (heard != null && heard != target.phoneme ? 'That sounded like /$heard/.' : null);
-      if (_mode == PracticeMode.phoneme) {
-        _startDemo(cue, spoken: spoken);
-      } else {
-        setState(() => _feedback = '$cue Watch again, then try.');
-        _speakThenDemonstrate(spoken ?? 'Watch again.');
-      }
-    } catch (e) {
-      print('assess error: $e');
-      setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _isAssessing = false);
+    if (_model.lastWasCorrect) {
+      _afterPhonemeDecision('You got the /${target.phoneme}/ sound!');
+      return;
+    }
+    if (_mode == PracticeMode.phoneme) {
+      _startDemo(tip, spoken: tip);
+    } else {
+      setState(() => _feedback = '$tip Watch again, then try.');
+      _speakThenDemonstrate(tip);
     }
   }
 
-  /// Runs the ONNX face model on the last sound attempt, or returns null if there's no model
-  /// for this phoneme, no usable face data, or the lips looked right (the camera only
-  /// explains a miss; then the tongue/voicing/Azure cue is used instead).
+  /// Runs the ONNX lip model on the last sound attempt and returns its tip,
+  /// or null if there's no model for this sound or no usable face data.
   Future<String?> _faceModelFeedback(String phoneme) async {
     final faceJson = _lastFaceJson;
     if (!PhonemeQualityModel.hasModelFor(phoneme) || faceJson == null) return null;
@@ -282,7 +261,6 @@ class _PracticePageState extends State<PracticePage> {
       await _model.loadModel(phoneme);
       final feedback = _model.getPhonemeFeedback(faceJson);
       print("visual feedback for /$phoneme/: ${_model.lastLabel} $feedback");
-      if (_model.lastWasCorrect) return null;
       return feedback;
     } catch (e) {
       print('face model error: $e');

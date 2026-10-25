@@ -45,30 +45,10 @@ Map<String, double> boostFor(String ipa, double gain) {
   }
 }
 
-const Map<String, String> _voicingPartner = {
-  'p': 'b', 'b': 'p', 't': 'd', 'd': 't', 'k': 'g', 'g': 'k', 'ɡ': 'k',
-  'f': 'v', 'v': 'f', 's': 'z', 'z': 's', 'θ': 'ð', 'ð': 'θ',
-  'ʃ': 'ʒ', 'ʒ': 'ʃ', 'tʃ': 'dʒ', 'dʒ': 'tʃ',
-};
-const Set<String> _voiced = {'b', 'd', 'g', 'ɡ', 'v', 'z', 'ð', 'ʒ', 'dʒ'};
-
-/// "Touch your throat" cue when Azure heard the voiced/voiceless partner of
-/// the target (p for b, s for z, ...), otherwise null.
-String? voicingCue(PhonemeAssessment p) {
-  if (p.nBestPhonemes.isEmpty) return null;
-  final heard = p.nBestPhonemes.first.phoneme;
-  if (_voicingPartner[p.phoneme] != heard) return null;
-  return _voiced.contains(p.phoneme)
-      ? 'Touch your throat: /${p.phoneme}/ should buzz.'
-      : 'Touch your throat: /${p.phoneme}/ should not buzz, just air.';
-}
-
-/// How to say one sound on its own, like a teacher would.
-/// [text] is the reference Azure scores the child against (the spellings
-/// eLEXir's ice bridges game uses: "p" alone would be scored as the letter
-/// name "pee"); vowels use a short host word and only the vowel is scored.
-/// [ipa] is exactly what the coach says (as plain text "puh" comes out
-/// "pooh" and "sss" as "ess ess ess").
+/// How to say one sound on its own, like a teacher would (the spellings
+/// eLEXir's ice bridges game uses). [text] is what the child is shown and
+/// the coach's text; [ipa] is exactly what the coach says (as plain text
+/// "puh" comes out "pooh" and "sss" as "ess ess ess").
 typedef SoundPrompt = ({String text, String ipa});
 
 const Map<String, SoundPrompt> _soundPrompts = {
@@ -85,9 +65,9 @@ const Map<String, SoundPrompt> _soundPrompts = {
   'l': (text: 'luh', ipa: 'lʌ'), 'ɹ': (text: 'ruh', ipa: 'ɹʌ'), 'w': (text: 'wuh', ipa: 'wʌ'),
   'j': (text: 'yuh', ipa: 'jʌ'), 'h': (text: 'huh', ipa: 'hʌ'), 'ŋ': (text: 'ng', ipa: 'ŋ'),
   // vowels
-  'æ': (text: 'at', ipa: 'æ'), 'ɑ': (text: 'ah', ipa: 'ɑ'), 'ɔ': (text: 'aw', ipa: 'ɔ'),
-  'ɛ': (text: 'eh', ipa: 'ɛ'), 'ɪ': (text: 'it', ipa: 'ɪ'), 'i': (text: 'ee', ipa: 'i'),
-  'ʊ': (text: 'put', ipa: 'ʊ'), 'u': (text: 'too', ipa: 'u'), 'ʌ': (text: 'uh', ipa: 'ʌ'),
+  'æ': (text: 'a', ipa: 'æ'), 'ɑ': (text: 'ah', ipa: 'ɑ'), 'ɔ': (text: 'aw', ipa: 'ɔ'),
+  'ɛ': (text: 'eh', ipa: 'ɛ'), 'ɪ': (text: 'ih', ipa: 'ɪ'), 'i': (text: 'ee', ipa: 'i'),
+  'ʊ': (text: 'oo', ipa: 'ʊ'), 'u': (text: 'oo', ipa: 'u'), 'ʌ': (text: 'uh', ipa: 'ʌ'),
   'ə': (text: 'uh', ipa: 'ə'), 'oʊ': (text: 'oh', ipa: 'oʊ'), 'eɪ': (text: 'ay', ipa: 'eɪ'),
   'aɪ': (text: 'eye', ipa: 'aɪ'), 'aʊ': (text: 'ow', ipa: 'aʊ'), 'ɔɪ': (text: 'oy', ipa: 'ɔɪ'),
   'ɝ': (text: 'her', ipa: 'ɝ'), 'ɚ': (text: 'her', ipa: 'ɝ'),
@@ -136,27 +116,4 @@ SoundPrompt soundPromptFor(String ipa, {String? before, String? after}) {
     return (before: at(i - 1), after: at(i + 1));
   }
   return (before: null, after: null);
-}
-
-/// Single sounds are hard for speech scoring, so the bar is lower than for
-/// words (ice bridges uses the same 50).
-const double soundPassScore = 50;
-
-/// Score for a single-sound attempt: Azure's best score for the target sound
-/// (the child says it once), or the overall accuracy if Azure didn't line the
-/// sound up.
-double soundScore(PAResult result, String phoneme) =>
-    bestPhoneme(result, phoneme)?.accuracyScore ?? result.accuracyScore;
-
-/// The best-scoring occurrence of [phoneme] in [result], or null.
-PhonemeAssessment? bestPhoneme(PAResult result, String phoneme) {
-  PhonemeAssessment? best;
-  for (final word in result.words) {
-    for (final p in word.phonemes) {
-      if (p.phoneme == phoneme && (best == null || p.accuracyScore > best.accuracyScore)) {
-        best = p;
-      }
-    }
-  }
-  return best;
 }

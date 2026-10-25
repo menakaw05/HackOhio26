@@ -20,6 +20,9 @@ class PhonemeQualityModel {
   String? lastLabel;
   bool get lastWasCorrect => correctLabels.contains(lastLabel);
 
+  // Share of the last attempt's frames that got the correct label (0-1).
+  double lastCorrectFraction = 0;
+
   // OrtEnv.init() creates a new native env on every call, so only do it once per app
   static bool _envInitialized = false;
 
@@ -93,6 +96,7 @@ class PhonemeQualityModel {
     // 4. majority vote
     final finalLabel = _majorityVote(preds);
     lastLabel = finalLabel;
+    lastCorrectFraction = preds.where(correctLabels.contains).length / preds.length;
 
     // 5. map to feedback
     return _labelToFeedback[finalLabel] as String? ??
