@@ -41,7 +41,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                MirrorULogo(size: 22, onLongPress: () => showDebugMenu(context)),
+                EchoLogo(size: 22, onLongPress: () => showDebugMenu(context)),
                 const Spacer(),
                 Tooltip(
                   message: 'Switch learner',

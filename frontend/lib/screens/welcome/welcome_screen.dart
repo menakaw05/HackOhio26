@@ -24,7 +24,7 @@ class WelcomeScreen extends StatelessWidget {
             children: [
               const SizedBox(height: AppSpace.xl),
               Center(
-                child: MirrorULogo(size: 40, onLongPress: () => showDebugMenu(context)),
+                child: EchoLogo(size: 40, onLongPress: () => showDebugMenu(context)),
               ),
               const SizedBox(height: AppSpace.xs),
               Text('See it. Say it. Shine!',

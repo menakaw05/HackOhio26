@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// mirrorU palette: a lotus on a lake. Teals and blue-greens for the water, lotus pinks for
+/// echo palette: a lotus on a lake. Teals and blue-greens for the water, lotus pinks for
 /// warmth. Feedback colors never use red for a child's attempt.
 abstract final class AppColors {
   // brand

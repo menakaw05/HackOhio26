@@ -11,7 +11,7 @@ void main() {
     tester.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures(disableAnimations: true);
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
-    await tester.pumpWidget(const MirrorUApp());
+    await tester.pumpWidget(const EchoApp());
     await tester.pumpAndSettle();
 
     expect(find.text("Who's practicing today?"), findsOneWidget);

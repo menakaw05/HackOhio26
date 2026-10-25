@@ -6,9 +6,9 @@ import '../data/models.dart';
 import '../theme/app_theme.dart';
 import 'motion.dart';
 
-/// "mirrorU" wordmark: a lotus-pink U in a teal mirror.
-class MirrorULogo extends StatelessWidget {
-  const MirrorULogo({super.key, this.size = 28, this.onLongPress, this.light = false});
+/// "echo" wordmark: sound waves in a lake-blue bubble, with a lotus-pink o.
+class EchoLogo extends StatelessWidget {
+  const EchoLogo({super.key, this.size = 28, this.onLongPress, this.light = false});
 
   final double size;
   final VoidCallback? onLongPress;
@@ -24,24 +24,26 @@ class MirrorULogo extends StatelessWidget {
         Container(
           width: size * 1.2,
           height: size * 1.2,
-          decoration: const BoxDecoration(gradient: AppGradients.lake, shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            gradient: AppGradients.lake,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.lakeDeep, width: size * 0.07),
+          ),
           alignment: Alignment.center,
-          child: Text('U',
-              style: AppText.title.copyWith(
-                  fontSize: size * 0.75, color: Colors.white, height: 1)),
+          child: Icon(Icons.graphic_eq_rounded, color: Colors.white, size: size * 0.78),
         ),
         SizedBox(width: size * 0.3),
         Text.rich(
           TextSpan(children: [
-            TextSpan(text: 'mirror', style: TextStyle(color: light ? Colors.white : AppColors.ink)),
-            const TextSpan(text: 'U', style: TextStyle(color: AppColors.lotus)),
+            TextSpan(text: 'ech', style: TextStyle(color: light ? Colors.white : AppColors.ink)),
+            const TextSpan(text: 'o', style: TextStyle(color: AppColors.lotus)),
           ]),
           style: AppText.display.copyWith(fontSize: size),
         ),
       ],
     );
     return Semantics(
-      label: 'mirrorU',
+      label: 'echo',
       excludeSemantics: true,
       child: GestureDetector(onLongPress: onLongPress, child: mark),
     );
@@ -148,7 +150,7 @@ class _OctopusBuddyState extends State<OctopusBuddy> with TickerProviderStateMix
   Widget build(BuildContext context) {
     final mood = _mood;
     return Semantics(
-      label: 'mirrorU octopus',
+      label: 'echo octopus',
       excludeSemantics: true,
       child: GestureDetector(
         onTap: _cheer,

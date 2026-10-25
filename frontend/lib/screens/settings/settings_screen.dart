@@ -141,7 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => showAboutDialog(
                   context: context,
-                  applicationName: 'mirrorU',
+                  applicationName: 'echo',
                   applicationVersion: '0.1.0 (prototype)',
                   applicationLegalese:
                       'Built at HackOhio 2026. A practice aid that works alongside a '

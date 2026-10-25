@@ -9,14 +9,14 @@ import 'theme/app_theme.dart';
 // Dev only: skip the profile picker, e.g. --dart-define=DEMO_LEARNER=maya
 const _demoLearner = String.fromEnvironment('DEMO_LEARNER');
 
-class MirrorUApp extends StatefulWidget {
-  const MirrorUApp({super.key});
+class EchoApp extends StatefulWidget {
+  const EchoApp({super.key});
 
   @override
-  State<MirrorUApp> createState() => _MirrorUAppState();
+  State<EchoApp> createState() => _EchoAppState();
 }
 
-class _MirrorUAppState extends State<MirrorUApp> {
+class _EchoAppState extends State<EchoApp> {
   late final AppState _state = AppState();
   late final GoRouter _router = buildRouter(_state);
 
@@ -40,7 +40,7 @@ class _MirrorUAppState extends State<MirrorUApp> {
       child: ChangeNotifierProvider.value(
         value: _state.queue,
         child: MaterialApp.router(
-          title: 'mirrorU',
+          title: 'echo',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
           routerConfig: _router,
