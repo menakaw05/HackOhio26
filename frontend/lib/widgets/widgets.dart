@@ -11,3 +11,4 @@ export 'practice_controls.dart';
 export 'sound_bar.dart';
 export 'states.dart';
 export 'stats.dart';
+export 'word_picture.dart';

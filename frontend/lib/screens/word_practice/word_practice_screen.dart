@@ -421,8 +421,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     final coach = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (pictureFor(_word.text) case final picture?)
-          Text(picture, style: const TextStyle(fontSize: 64), textAlign: TextAlign.center),
+        Center(child: WordPicture(word: _word.text, size: 120)),
+        const SizedBox(height: AppSpace.s),
         Text(_word.text, style: AppText.wordHero, textAlign: TextAlign.center),
         const SizedBox(height: AppSpace.s),
         _SoundRow(

@@ -127,7 +127,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
             children: [
               AnimatedSwitcher(
                 duration: AppMotion.medium,
-                child: Text(pictureFor(_word) ?? '', key: ValueKey(_word), style: const TextStyle(fontSize: 110)),
+                child: WordPicture(key: ValueKey(_word), word: _word, size: 170),
               ),
               const Spacer(),
               AnimatedSwitcher(
