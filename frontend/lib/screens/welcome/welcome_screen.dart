@@ -22,17 +22,17 @@ class WelcomeScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.all(AppSpace.xl),
             children: [
-              const SizedBox(height: AppSpace.xxl),
-              Center(child: MirrorULogo(size: 40, onLongPress: () => showDebugMenu(context))),
               const SizedBox(height: AppSpace.xl),
-              const ComingSoon(
-                label: 'Mascot illustration',
-                icon: Icons.local_florist_rounded,
-                height: 140,
+              Center(
+                child: MirrorULogo(size: 40, onLongPress: () => showDebugMenu(context)),
               ),
-              const SizedBox(height: AppSpace.xl),
-              Text("Who's practicing today?",
-                  style: AppText.title, textAlign: TextAlign.center),
+              const SizedBox(height: AppSpace.xs),
+              Text('See it. Say it. Shine!',
+                  style: AppText.section.copyWith(color: AppColors.lotusDeep), textAlign: TextAlign.center),
+              const SizedBox(height: AppSpace.s),
+              const Center(child: LotusBuddy(size: 180)),
+              const SizedBox(height: AppSpace.l),
+              Text("Who's practicing today?", style: AppText.title, textAlign: TextAlign.center),
               const SizedBox(height: AppSpace.l),
               for (final (i, learner) in state.learners.indexed) ...[
                 FadeSlideIn(
@@ -59,7 +59,7 @@ class WelcomeScreen extends StatelessWidget {
                     child: Icon(Icons.add_rounded, color: AppColors.lake),
                   ),
                   const SizedBox(width: AppSpace.m),
-                  Text('Add a learner', style: AppText.section),
+                  Flexible(child: Text('Add a learner', style: AppText.section)),
                 ]),
               ),
             ],

@@ -165,11 +165,24 @@ class _ContinueCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(word == null ? "Let's get started" : 'Up next',
-              style: AppText.bodyStrong.copyWith(color: Colors.white70)),
-          const SizedBox(height: AppSpace.xs),
-          Text(word?.text ?? 'Find your sounds',
-              style: AppText.wordHero.copyWith(color: Colors.white, fontSize: 44)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(word == null ? "Let's get started" : 'Up next',
+                        style: AppText.bodyStrong.copyWith(color: Colors.white70)),
+                    const SizedBox(height: AppSpace.xs),
+                    Text(word?.text ?? 'Find your sounds',
+                        style: AppText.wordHero.copyWith(color: Colors.white, fontSize: 44)),
+                  ],
+                ),
+              ),
+              const LotusBuddy(size: 92),
+            ],
+          ),
           if (word != null) ...[
             const SizedBox(height: AppSpace.s),
             SourceChip(
@@ -198,7 +211,7 @@ class _QueueWordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 156,
+      width: 176,
       child: AppCard(
         semanticLabel: 'Practice ${word.text}',
         onTap: () => context.push(Routes.wordPractice(word.text, source: word.source)),
