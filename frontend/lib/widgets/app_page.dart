@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_theme.dart';
+import 'ocean.dart';
 import 'states.dart';
 
 /// Standard scrollable page: app bar + padded list.
@@ -28,12 +29,14 @@ class AppPage extends StatelessWidget {
         actions: actions,
         leading: leading,
       ),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpace.page, AppSpace.s, AppSpace.page, AppSpace.xxl),
-          children: children,
+      body: OceanBackdrop(
+        child: SafeArea(
+          top: false,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpace.page, AppSpace.s, AppSpace.page, AppSpace.xxl),
+            children: children,
+          ),
         ),
       ),
     );

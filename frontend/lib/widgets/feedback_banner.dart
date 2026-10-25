@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'identity.dart';
 
 /// The three ways an attempt can go. There is deliberately no "wrong".
 enum FeedbackKind {
@@ -35,15 +36,11 @@ class FeedbackBanner extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: kind.color,
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: AppColors.edgeOf(kind.color), offset: const Offset(0, 3))],
-              ),
-              child: Icon(kind.icon, color: Colors.white, size: 34),
+            // the octopus cheers a great try and smiles at the rest
+            OctopusBuddy(
+              size: 70,
+              mood: kind == FeedbackKind.success ? BuddyMood.happy : BuddyMood.idle,
+              bubbles: false,
             ),
             const SizedBox(width: AppSpace.m),
             Expanded(

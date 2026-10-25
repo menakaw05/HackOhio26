@@ -35,7 +35,7 @@ class HomeScreen extends StatelessWidget {
     final improving = state.trends.where((t) => t.weekly.last > t.weekly.first).length;
 
     return Scaffold(
-      body: SafeArea(
+      body: OceanBackdrop(child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(AppSpace.page, AppSpace.s, AppSpace.page, AppSpace.xxl),
           children: [
@@ -90,8 +90,8 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: StatTile(
-                    icon: Icons.local_fire_department_rounded,
-                    color: AppColors.lotus,
+                    icon: Icons.waves_rounded,
+                    color: AppColors.sky,
                     value: '${learner.streak}',
                     label: 'day streak',
                   ),
@@ -145,7 +145,7 @@ class HomeScreen extends StatelessWidget {
               ),
           ],
         ),
-      ),
+      )),
     );
   }
 }
@@ -180,7 +180,7 @@ class _ContinueCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const LotusBuddy(size: 92),
+              const OctopusBuddy(size: 96),
             ],
           ),
           if (word != null) ...[

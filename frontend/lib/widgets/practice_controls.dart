@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'feedback_banner.dart';
 import 'motion.dart';
+import 'ocean.dart';
 
 /// Big round mic button with a gentle pulse while listening.
 class MicButton extends StatefulWidget {
@@ -59,18 +60,16 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // expanding, fading ring behind the button
+            // bubble ripples spreading out behind the button
             AnimatedBuilder(
               animation: _pulse,
-              builder: (context, _) => _pulse.value == 0
+              builder: (context, _) => !_pulse.isAnimating
                   ? const SizedBox.shrink()
-                  : Container(
-                      width: AppSize.micButton * (1 + 0.5 * _pulse.value),
-                      height: AppSize.micButton * (1 + 0.5 * _pulse.value),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color.withValues(alpha: 0.35 * (1 - _pulse.value)),
-                      ),
+                  : Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        for (final lag in [0.0, 0.5]) _ripple(color, (_pulse.value + lag) % 1),
+                      ],
                     ),
             ),
             PressScale(
@@ -99,10 +98,31 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
                             AppHaptics.tap();
                             onPressed();
                           },
-                    child: Icon(
-                      widget.listening ? Icons.stop_rounded : Icons.mic_rounded,
-                      color: Colors.white,
-                      size: 48,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          widget.listening ? Icons.stop_rounded : Icons.mic_rounded,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                        // a bubble's shine
+                        Positioned(
+                          left: 18,
+                          top: 14,
+                          child: Transform.rotate(
+                            angle: -0.6,
+                            child: Container(
+                              width: 22,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.55),
+                                borderRadius: AppRadius.pillRadius,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -114,6 +134,15 @@ class _MicButtonState extends State<MicButton> with SingleTickerProviderStateMix
     );
   }
 }
+
+Widget _ripple(Color color, double v) => Container(
+      width: AppSize.micButton * (1 + 0.6 * v),
+      height: AppSize.micButton * (1 + 0.6 * v),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.7 * (1 - v)), width: 4),
+      ),
+    );
 
 /// Hear → Watch → Try → Feedback.
 class StepperBar extends StatelessWidget {
@@ -182,7 +211,7 @@ class StepperBar extends StatelessWidget {
   }
 }
 
-/// One star per attempt, colored by how it went; empty stars are attempts left.
+/// One starfish per attempt, colored by how it went; empty ones are attempts left.
 class AttemptDots extends StatelessWidget {
   const AttemptDots({super.key, required this.total, required this.results});
 
@@ -196,13 +225,11 @@ class AttemptDots extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // a star per try: gold when it was great, the result's color otherwise
+          // a starfish per try: gold when it was great, the result's color otherwise
           for (var i = 0; i < total; i++)
-            Icon(
-              i < results.length ? Icons.star_rounded : Icons.star_outline_rounded,
-              size: 30,
+            Starfish(
               color: i >= results.length
-                  ? AppColors.inkFaint
+                  ? null
                   : (results[i] == FeedbackKind.success ? AppColors.sun : results[i].color),
             ),
         ],

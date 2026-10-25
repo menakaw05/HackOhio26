@@ -16,8 +16,8 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppGradients.lakeDawn),
+      body: OceanBackdrop(
+        gradient: AppGradients.lakeDawn,
         child: SafeArea(
           child: ListView(
             padding: const EdgeInsets.all(AppSpace.xl),
@@ -30,7 +30,7 @@ class WelcomeScreen extends StatelessWidget {
               Text('See it. Say it. Shine!',
                   style: AppText.section.copyWith(color: AppColors.lotusDeep), textAlign: TextAlign.center),
               const SizedBox(height: AppSpace.s),
-              const Center(child: LotusBuddy(size: 180)),
+              const Center(child: OctopusBuddy(size: 180)),
               const SizedBox(height: AppSpace.l),
               Text("Who's practicing today?", style: AppText.title, textAlign: TextAlign.center),
               const SizedBox(height: AppSpace.l),
@@ -88,7 +88,7 @@ class _LearnerCard extends StatelessWidget {
           Expanded(child: Text(learner.name, style: AppText.title)),
           if (learner.streak > 0)
             TagBadge(
-              label: '🔥 ${learner.streak} days',
+              label: '🌊 ${learner.streak} days',
               color: AppColors.lotusDeep,
               background: AppColors.lotusBlush,
             ),

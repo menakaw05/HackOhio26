@@ -520,12 +520,15 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   Widget _coachView() {
     final url = _services.coachUrl;
     if (url == null) {
-      return ComingSoon(
-        label: 'Your avatar coach',
-        icon: Icons.face_retouching_natural_rounded,
-        height: null,
-        // no room for it beside the camera
-        detail: _cameraOn ? null : 'Says the word and shows the mouth shape.',
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.m),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.face_retouching_natural_rounded, color: AppColors.lakeDeep, size: 40),
+            Text('Your avatar coach', style: AppText.caption.copyWith(color: AppColors.lakeDeep)),
+          ]),
+        ),
       );
     }
     return IgnorePointer(
@@ -756,20 +759,20 @@ class _AvatarStage extends StatelessWidget {
   Widget build(BuildContext context) {
     final camera = this.camera;
     return Container(
-      // a spotlit stage in a white frame
-      decoration: BoxDecoration(
+      // a pond, with the coach looking out of a porthole
+      decoration: const BoxDecoration(
         gradient: AppGradients.stage,
         borderRadius: AppRadius.cardRadius,
-        border: Border.all(color: Colors.white, width: 4),
-        boxShadow: [BoxShadow(color: AppColors.edgeOf(AppColors.lakeDeep), offset: const Offset(0, 6))],
+        border: Border.fromBorderSide(BorderSide(color: AppColors.lakeDeep, width: 2.5)),
+        boxShadow: AppShadows.soft,
       ),
       padding: const EdgeInsets.all(AppSpace.m),
       child: camera == null
-          ? coach
+          ? Center(child: Porthole(child: coach))
           : Flex(
               direction: vertical ? Axis.vertical : Axis.horizontal,
               children: [
-                Expanded(child: coach),
+                Expanded(child: Center(child: Porthole(child: coach))),
                 const SizedBox(width: AppSpace.s, height: AppSpace.s),
                 Expanded(child: camera),
               ],

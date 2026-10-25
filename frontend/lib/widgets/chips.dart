@@ -25,37 +25,46 @@ class SoundChip extends StatelessWidget {
       button: onTap != null,
       selected: selected,
       label: 'Sound $phoneme',
-      // a chunky tile: colored rim and a ledge underneath
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: AppRadius.chipRadius,
-          boxShadow: [
-            BoxShadow(color: color.withValues(alpha: selected ? 1 : 0.3), offset: const Offset(0, 4)),
-          ],
+      // a bubble: round, rimmed, with a shine
+      child: Material(
+        color: background,
+        shape: StadiumBorder(
+          side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.55), width: 2.5),
         ),
-        child: Material(
-          color: background,
-          shape: RoundedRectangleBorder(
-            borderRadius: AppRadius.chipRadius,
-            side: BorderSide(color: color.withValues(alpha: selected ? 1 : 0.35), width: 2),
-          ),
-          child: InkWell(
-            borderRadius: AppRadius.chipRadius,
-            onTap: onTap,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                  minWidth: AppSize.minTouch, minHeight: AppSize.minTouch),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.m),
-                child: Center(
-                  widthFactor: 1,
-                  child: Text(
-                    '/$phoneme/',
-                    style: AppText.section.copyWith(color: selected ? Colors.white : color),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Stack(
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 58, minHeight: 58),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.m),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Text(
+                      '/$phoneme/',
+                      style: AppText.section.copyWith(color: selected ? Colors.white : color),
+                    ),
                   ),
                 ),
               ),
-            ),
+              Positioned(
+                left: 11,
+                top: 9,
+                child: Transform.rotate(
+                  angle: -0.6,
+                  child: Container(
+                    width: 13,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      borderRadius: AppRadius.pillRadius,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
