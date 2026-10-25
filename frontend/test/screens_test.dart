@@ -89,6 +89,7 @@ void main() {
         scoreOf('boot', [('b', 95), ('u', 92), ('t', 90)], accuracy: 93),
       ],
       lipChecks: [
+        const LipCheck.notHeard(), // stage 2, too quiet
         const LipCheck(passed: false, score: 0.2, tip: 'Try rounding your lips more.'), // stage 2
         const LipCheck(passed: true, score: 0.8, tip: 'Great job!'), // stage 3
       ],
@@ -129,6 +130,11 @@ void main() {
     expect(find.text('Let\'s practice this a bit more! Can you say "oo" in boot?', skipOffstage: false),
         findsOneWidget);
     expect(services.lipModel, 'u');
+
+    await sayIt();
+    // the mic heard no voice: ask again instead of judging the resting mouth
+    expect(find.text("I couldn't hear you. Say it a little louder.", skipOffstage: false), findsOneWidget);
+    expect(find.text('Try rounding your lips more.', skipOffstage: false), findsNothing);
 
     await sayIt();
     // stage 2 missed: the coach says the lip model's tip and shows it

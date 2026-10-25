@@ -49,7 +49,10 @@ namespace backend.Controllers
                     var ssml = $@"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
     <voice name='{AvatarVoice}'><prosody rate='{AvatarRate}'>{SecurityElement.Escape(word)}</prosody></voice>
 </speak>";
-                    var tts = await synthesizer.SpeakSsmlAsync(ssml);
+                    SpeechSynthesisResult tts;
+                    await TTSController.Synthesis.WaitAsync();
+                    try { tts = await synthesizer.SpeakSsmlAsync(ssml); }
+                    finally { TTSController.Synthesis.Release(); }
                     if (tts.Reason == ResultReason.Canceled)
                     {
                         var c = SpeechSynthesisCancellationDetails.FromResult(tts);

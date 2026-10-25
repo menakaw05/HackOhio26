@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'avatar_view.dart';
 import 'face_camera.dart';
 import 'phoneme_classifier.dart';
+import 'recorder_controller.dart';
 import 'speech_controller.dart';
 import 'speech_models.dart';
 import 'stage4/follow_along.dart';
@@ -11,10 +12,21 @@ import 'stage4/golden_store.dart';
 import 'stage4/mouth_matcher.dart';
 import 'stage4/mouth_tracker.dart';
 import 'tts_service.dart';
+import 'voice_window.dart';
 
 /// One sound attempt judged by the ONNX lip model.
 class LipCheck {
-  const LipCheck({required this.passed, required this.score, required this.tip});
+  const LipCheck({
+    required this.passed,
+    required this.score,
+    required this.tip,
+    this.correctFrames = 0,
+    this.frames = 0,
+    this.heard = true,
+  });
+
+  /// The mic ran but heard no voice, so nothing was judged: the resting mouth would.
+  const LipCheck.notHeard() : this(passed: false, score: 0, tip: '', heard: false);
 
   final bool passed;
 
@@ -23,6 +35,12 @@ class LipCheck {
 
   /// The model's feedback for its label, e.g. "Try rounding your lips more".
   final String tip;
+
+  /// How many of the attempt's camera frames had the right lip shape.
+  final int correctFrames;
+  final int frames;
+
+  final bool heard;
 }
 
 /// What Word Practice uses: Azure scoring and speech through the backend, the
@@ -75,6 +93,8 @@ class LivePracticeServices implements PracticeServices {
   final TtsService _tts = TtsService();
   final FaceCamera _faceCamera = FaceCamera();
   final PhonemeQualityModel _lips = PhonemeQualityModel();
+  final RecordingService _mic = RecordingService();
+  DateTime? _micStarted;
   MouthTracker? _tracker;
 
   // building the matcher from 7 MB of golden data takes a moment; once per app run
@@ -120,19 +140,62 @@ class LivePracticeServices implements PracticeServices {
   }
 
   @override
-  Future<void> startLipCapture() => _faceCamera.startFaceStream();
+  Future<void> startLipCapture() async {
+    await _faceCamera.startFaceStream();
+    // the mic only times the sound (see stopLipCapture); the audio stays on the phone
+    try {
+      await _mic.start();
+      _micStarted = DateTime.now();
+    } catch (e) {
+      debugPrint('mic error: $e');
+      _micStarted = null;
+    }
+  }
 
   @override
   Future<LipCheck?> stopLipCapture() async {
     final faceJson = await _faceCamera.stopFaceStream();
+    final speaking = await _speakingTime();
+    if (speaking.silent) return const LipCheck.notHeard();
     try {
-      final tip = _lips.getPhonemeFeedback(faceJson);
+      final tip = _lips.getPhonemeFeedback(faceJson, from: speaking.from, to: speaking.to);
       if (tip == null) return null;
       debugPrint('lip model: ${_lips.lastLabel} $tip');
-      return LipCheck(passed: _lips.lastWasCorrect, score: _lips.lastCorrectFraction, tip: tip);
+      return LipCheck(
+        passed: _lips.lastWasCorrect,
+        score: _lips.lastCorrectFraction,
+        tip: tip,
+        correctFrames: _lips.lastCorrectFrames,
+        frames: _lips.lastFrames,
+      );
     } catch (e) {
       debugPrint('lip model error: $e');
       return null;
+    }
+  }
+
+  /// When the child spoke during the sound attempt, from the recording, which is then
+  /// deleted. [silent]: the mic ran and heard no voice. No times and not silent: the mic
+  /// didn't run, so the whole attempt is judged.
+  Future<({bool silent, DateTime? from, DateTime? to})> _speakingTime() async {
+    const unknown = (silent: false, from: null, to: null);
+    final started = _micStarted;
+    _micStarted = null;
+    if (started == null) return unknown;
+    try {
+      final file = await _mic.stop();
+      if (file == null) return unknown;
+      final bytes = await file.readAsBytes();
+      await file.delete();
+      final wav = readPcm16Wav(bytes);
+      if (wav == null) return unknown;
+      final voice = findVoice(wav.samples, wav.sampleRate);
+      debugPrint('voice: ${voice == null ? 'none' : '${voice.start.inMilliseconds}-${voice.end.inMilliseconds} ms'}');
+      if (voice == null) return (silent: true, from: null, to: null);
+      return (silent: false, from: started.add(voice.start), to: started.add(voice.end));
+    } catch (e) {
+      debugPrint('voice window error: $e');
+      return unknown;
     }
   }
 
@@ -173,6 +236,7 @@ class LivePracticeServices implements PracticeServices {
     _tracker?.dispose();
     _tts.dispose();
     _speech.dispose();
+    _mic.dispose();
     _faceCamera.dispose();
     _lips.dispose();
   }

@@ -40,6 +40,29 @@ void main() {
     expect(findWorstPhoneme(r)?.phoneme, 'u');
   });
 
+  test('the trouble sound is one the camera can check, if it was missed', () {
+    // apple: the /l/ scored lowest, but the a has a lip model
+    final apple = _result([
+      [_p('æ', 55), _p('p', 90), _p('ə', 70), _p('l', 30)],
+    ]);
+    expect(findTroublePhoneme(apple)?.phoneme, 'æ');
+    // the a was fine: practice the lowest sound
+    final fine = _result([
+      [_p('æ', 92), _p('p', 90), _p('ə', 70), _p('l', 30)],
+    ]);
+    expect(findTroublePhoneme(fine)?.phoneme, 'l');
+  });
+
+  test('"kit" for "cat": Azure gives no sounds, so the word\'s own stand in', () {
+    final kit = withWordSounds(_result([[]]), ['k', 'æ', 't']);
+    expect(findTroublePhoneme(kit)?.phoneme, 'æ');
+    // Azure's own sounds are kept when it gives them
+    final heard = _result([
+      [_p('k', 90), _p('æ', 40), _p('t', 90)],
+    ]);
+    expect(withWordSounds(heard, ['k', 'æ', 't']), same(heard));
+  });
+
   test('returns null when no phonemes were scored', () {
     expect(findWorstPhoneme(_result([[]])), isNull);
   });

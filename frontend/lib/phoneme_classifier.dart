@@ -16,12 +16,17 @@ class PhonemeQualityModel {
 
   static bool hasModelFor(String phoneme) => phonemeMap.containsKey(phoneme);
 
-  // Majority label of the last scored attempt, e.g. "HALFCLOSED".
+  // Majority label of the last scored attempt, e.g. "HALFCLOSED". The attempt passes when it's
+  // a correct label, as in reflexion. (A few correct frames in a row isn't enough: the resting
+  // mouth before "cut" can look like "cat". That's also why only frames from while the child
+  // was speaking are voted on, when we know that time.)
   String? lastLabel;
   bool get lastWasCorrect => correctLabels.contains(lastLabel);
 
-  // Share of the last attempt's frames that got the correct label (0-1).
+  // Share of the last attempt's frames that got the correct label (0-1), and the counts.
   double lastCorrectFraction = 0;
+  int lastCorrectFrames = 0;
+  int lastFrames = 0;
 
   // OrtEnv.init() creates a new native env on every call, so only do it once per app
   static bool _envInitialized = false;
@@ -83,7 +88,9 @@ class PhonemeQualityModel {
   /// - map to human feedback
   ///
   /// returns null if there was no usable mouth data
-  String? getPhonemeFeedback(String jsonInput) {
+  /// [from] and [to]: when the child was speaking (see voice_window.dart). Only frames from
+  /// then are voted on; the whole attempt still feeds the rolling features.
+  String? getPhonemeFeedback(String jsonInput, {DateTime? from, DateTime? to}) {
     if (!isLoaded) {
       throw StateError("model not loaded");
     }
@@ -99,10 +106,16 @@ class PhonemeQualityModel {
     final preds = frameVectors.map(predictClassForVector).toList();
     print("per-frame predictions for /$_loadedPhoneme/: $preds");
 
-    // 4. majority vote
-    final finalLabel = _majorityVote(preds);
+    // 4. majority vote, over the frames while the child was speaking when we know that time
+    final judged = (from != null && to != null)
+        ? framesDuring(preds, [for (final f in rawFrames) f.time], from, to)
+        : preds;
+    if (judged.length != preds.length) print("judged while speaking: $judged");
+    final finalLabel = majorityVote(judged);
     lastLabel = finalLabel;
-    lastCorrectFraction = preds.where(correctLabels.contains).length / preds.length;
+    lastFrames = judged.length;
+    lastCorrectFrames = judged.where(correctLabels.contains).length;
+    lastCorrectFraction = lastCorrectFrames / lastFrames;
 
     // 5. map to feedback
     return _labelToFeedback[finalLabel] as String? ??
@@ -152,7 +165,20 @@ class PhonemeQualityModel {
   }
 
   /// pick the mode of a list of labels
-  String _majorityVote(List<String> labels) {
+  /// Fewer frames than this while speaking (or no times): vote on the whole attempt.
+  static const minJudgedFrames = 3;
+
+  /// The [labels] of frames whose [times] fall between [from] and [to].
+  static List<String> framesDuring(
+      List<String> labels, List<DateTime?> times, DateTime from, DateTime to) {
+    final during = [
+      for (var i = 0; i < labels.length; i++)
+        if (times[i] case final t? when !t.isBefore(from) && !t.isAfter(to)) labels[i],
+    ];
+    return during.length >= minJudgedFrames ? during : labels;
+  }
+
+  static String majorityVote(List<String> labels) {
     final counts = <String, int>{};
     for (final l in labels) {
       counts[l] = (counts[l] ?? 0) + 1;

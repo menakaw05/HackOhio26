@@ -28,10 +28,6 @@ enum _Stage { word, sound, coach, build, check }
 const _stageLabels = ['Word', 'Sound', 'Coach', 'Sounds', 'Again'];
 const _passScore = 80.0; // Azure word accuracy; 60-80 is "almost"
 
-// The coach says tips a little slower than normal; sounds are demonstrated slower still
-// (the avatar page's default).
-const Map<String, dynamic> _tipTts = {'rate': '-10%'};
-
 /// The hero screen: one word, and the stages that help with it if it's missed.
 ///
 /// 1. Word: picture + word, no coach. Azure scores it. Right: done. Wrong: the stages
@@ -79,7 +75,6 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
   int _targetIndex = 0;
   SoundPrompt? _prompt;
   bool _lipModel = false; // the camera can check it
-  List<String> _tips = const [];
   LipCheck? _lastCheck;
   String? _note; // e.g. no face seen
   bool _soundDone = false;
@@ -175,9 +170,6 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     final prompt = _prompt;
     if (!_coachReady || coach == null || prompt == null) return;
     coach.prepare(prompt.text, tts: {'ipa': prompt.ipa});
-    for (final tip in _tips) {
-      coach.prepare(tip, tts: _tipTts);
-    }
   }
 
   /// What the coach shows: the trouble sound.
@@ -191,14 +183,11 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     _withCoach((c) => c.say(text, opts: opts));
   }
 
-  /// The coach says [tip], then demonstrates, in one go.
-  void _coachSays(String tip) {
-    final coach = _coachKey.currentState;
-    if (!_coachReady || coach == null) {
-      _services.speak(tip);
-      return;
-    }
-    coach.sayAll([(tip, {'tts': _tipTts}), _demo]);
+  /// [tip] in the app's voice (it's on screen too), then the coach shows the sound. The
+  /// coach only ever says the sound itself: whole sentences on its face looked eerie.
+  Future<void> _tipThenDemo(String tip) async {
+    await _services.speak(tip);
+    if (mounted && !_listening) _demonstrate();
   }
 
   /// The coach shows the trouble sound's mouth shape first ([hold]), then says it,
@@ -249,7 +238,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     }
   }
 
-  void _scoredFirst(PAResult score) {
+  void _scoredFirst(PAResult azure) {
+    final score = withWordSounds(azure, _word.phonemes);
     final passed = score.accuracyScore >= _passScore;
     setState(() {
       _firstScore = score;
@@ -260,7 +250,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
       _services.speak('You said ${_word.text}!');
       return;
     }
-    final worst = findWorstPhoneme(score);
+    final worst = findTroublePhoneme(score, passScore: _passScore);
     if (worst == null) {
       _services.speak("I couldn't hear that. Let's try again.");
       return;
@@ -286,7 +276,6 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
       _targetIndex = _scored.indexOf(target).clamp(0, _phonemes.length - 1);
       _prompt = prompt;
       _lipModel = PhonemeQualityModel.hasModelFor(target.phoneme);
-      _tips = const [];
       _lastCheck = null;
       _note = null;
       _soundDone = false;
@@ -294,7 +283,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     _services.speak("Let's practice this a bit more! Can you say /${prompt.ipa}/ in ${_word.text}?");
     if (_lipModel) {
       try {
-        _tips = await _services.loadLipModel(target.phoneme);
+        await _services.loadLipModel(target.phoneme);
       } catch (e) {
         debugPrint('lip model error: $e');
       }
@@ -324,8 +313,10 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     }
     final check = await _services.stopLipCapture();
     if (!mounted) return;
-    if (check == null) {
-      const note = "I couldn't see your mouth. Keep your face in the camera and try again.";
+    if (check == null || !check.heard) {
+      final note = check == null
+          ? "I couldn't see your mouth. Keep your face in the camera and try again."
+          : "I couldn't hear you. Say it a little louder.";
       setState(() => _note = note);
       _services.speak(note);
       return;
@@ -345,14 +336,14 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
             _stage = _Stage.coach;
             _stars.add(FeedbackKind.almost);
           });
-          _coachSays(checked
+          _tipThenDemo(checked
               ? _lastCheck!.tip
               : (isTongueSound(_target!.phoneme)
-                  ? 'This sound is made with your tongue. Watch me closely.'
-                  : 'Watch me closely.'));
+                  ? 'This sound is made with your tongue. Watch your coach closely.'
+                  : 'Watch your coach closely.'));
         }
       case _Stage.coach:
-        passed ? _soundPassed() : _coachSays(_lastCheck!.tip);
+        passed ? _soundPassed() : _tipThenDemo(_lastCheck!.tip);
       case _Stage.word:
       case _Stage.build:
       case _Stage.check:
@@ -379,7 +370,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
       _stars.removeLast();
       _soundDone = false;
     });
-    _coachSays('Watch how I make it.');
+    _tipThenDemo('Watch how your coach makes it.');
   }
 
   // -------------------------
@@ -735,7 +726,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
       );
     }
     final passed = score.accuracyScore >= _passScore;
-    final weakest = findWorstPhoneme(score);
+    final weakest = findTroublePhoneme(score, passScore: _passScore);
     return _StepCard(
       key: const ValueKey('word-done'),
       children: [
@@ -802,9 +793,14 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
       children: [
         if (note != null)
           FeedbackBanner(kind: FeedbackKind.focus, message: note)
-        else if (check != null)
-          FeedbackBanner(kind: FeedbackKind.almost, message: check.tip)
-        else if (!coachStage)
+        else if (check != null) ...[
+          FeedbackBanner(kind: FeedbackKind.almost, message: check.tip),
+          if (check.frames > 0) ...[
+            const SizedBox(height: AppSpace.s),
+            Text('The camera saw the right lip shape in ${check.correctFrames} of ${check.frames} frames.',
+                style: AppText.caption),
+          ],
+        ] else if (!coachStage)
           FeedbackBanner(
             kind: FeedbackKind.almost,
             message: "Let's practice this a bit more! Can you say \"${prompt.text}\" in ${_word.text}?",
