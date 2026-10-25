@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # macOS
 .DS_Store
+
+# word pictures the backend draws (WordImageEndpoint)
+backend/word-images/
