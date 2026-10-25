@@ -44,10 +44,27 @@ const Map<String, List<String>> demoPhonemes = {
   'road': ['r', 'oʊ', 'd'],
   'ride': ['r', 'aɪ', 'd'],
   'bumpy': ['b', 'ʌ', 'm', 'p', 'i'],
+  // words for the lip models (/p/, /æ/, /u/)
+  'pop': ['p', 'ɑ', 'p'],
+  'apple': ['æ', 'p', 'ə', 'l'],
 };
 
-List<String> phonemesFor(String word) =>
-    demoPhonemes[word.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '')] ?? const [];
+/// A picture for each seeded word, shown with it (the first try is picture + word).
+const Map<String, String> demoPictures = {
+  'boot': '👢', 'moon': '🌙', 'food': '🍎', 'blue': '🔵', 'spoon': '🥄', 'zoo': '🦒',
+  'ship': '🚢', 'fish': '🐟', 'shell': '🐚', 'rabbit': '🐰', 'red': '🔴', 'rain': '🌧️',
+  'frog': '🐸', 'tree': '🌳', 'thumb': '👍', 'three': '3️⃣', 'bath': '🛁', 'sun': '☀️',
+  'star': '⭐', 'snake': '🐍', 'leaf': '🍃', 'lake': '🏞️', 'light': '💡', 'lotus': '🪷',
+  'ball': '⚽', 'cat': '🐱', 'duck': '🦆', 'wagon': '🛒', 'lunch': '🥪', 'jumped': '🦘',
+  'stars': '✨', 'hopped': '🐇', 'green': '🟢', 'road': '🛣️', 'ride': '🚲', 'bumpy': '🛻',
+  'pop': '🎈', 'apple': '🍎',
+};
+
+String _key(String word) => word.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+
+List<String> phonemesFor(String word) => demoPhonemes[_key(word)] ?? const [];
+
+String? pictureFor(String word) => demoPictures[_key(word)];
 
 /// The 12 words the Diagnostic walks through.
 const diagnosticWords = [

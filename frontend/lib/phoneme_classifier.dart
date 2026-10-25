@@ -8,9 +8,20 @@ import 'model/feature_extraction.dart';
 
 class PhonemeQualityModel {
   // Azure IPA phoneme -> model asset suffix. Only phonemes listed here have a face model.
-  static const Map<String, String> phonemeMap = {'u': 'O'};
+  // u as in "boot", p as in "pop", æ as in "apple".
+  static const Map<String, String> phonemeMap = {'u': 'O', 'p': 'P', 'æ': 'A'};
+
+  // The label each model gives a correct attempt.
+  static const Set<String> correctLabels = {'OO', 'GOOD', 'APPLE'};
 
   static bool hasModelFor(String phoneme) => phonemeMap.containsKey(phoneme);
+
+  // Majority label of the last scored attempt, e.g. "HALFCLOSED".
+  String? lastLabel;
+  bool get lastWasCorrect => correctLabels.contains(lastLabel);
+
+  // Share of the last attempt's frames that got the correct label (0-1).
+  double lastCorrectFraction = 0;
 
   // OrtEnv.init() creates a new native env on every call, so only do it once per app
   static bool _envInitialized = false;
@@ -25,6 +36,12 @@ class PhonemeQualityModel {
   late Map<String, dynamic> _labelToFeedback;
 
   bool get isLoaded => _session != null;
+
+  /// The tips this model can give for a miss (needs [loadModel] first).
+  List<String> get missTips => [
+        for (final e in _labelToFeedback.entries)
+          if (!correctLabels.contains(e.key)) e.value as String,
+      ];
 
   /// load ONNX model + label maps for a specific phoneme
   Future<void> loadModel(String phoneme) async {
@@ -84,6 +101,8 @@ class PhonemeQualityModel {
 
     // 4. majority vote
     final finalLabel = _majorityVote(preds);
+    lastLabel = finalLabel;
+    lastCorrectFraction = preds.where(correctLabels.contains).length / preds.length;
 
     // 5. map to feedback
     return _labelToFeedback[finalLabel] as String? ??

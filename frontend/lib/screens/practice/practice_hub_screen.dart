@@ -135,13 +135,16 @@ class _HubCard extends StatelessWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
+                    color: color,
                     borderRadius: AppRadius.chipRadius,
+                    boxShadow: [BoxShadow(color: AppColors.edgeOf(color), offset: const Offset(0, 4))],
                   ),
-                  child: Icon(icon, color: color, size: 30),
+                  child: Icon(icon, color: Colors.white, size: 30),
                 ),
-                const Spacer(),
-                if (prototype) const Flexible(child: TagBadge(label: 'Prototype')),
+                if (prototype)
+                  const Expanded(
+                    child: Align(alignment: Alignment.topRight, child: TagBadge(label: 'Prototype')),
+                  ),
               ],
             ),
             const Spacer(),

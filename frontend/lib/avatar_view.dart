@@ -11,6 +11,13 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+/// avatar-web dev server (`npm run dev:lan`) on the laptop, same Wi-Fi:
+///   flutter run --dart-define=AVATAR_URL=http://192.168.x.x:5173
+const String avatarBaseUrl = String.fromEnvironment(
+  'AVATAR_URL',
+  defaultValue: 'http://localhost:5173',
+);
+
 class AvatarView extends StatefulWidget {
   const AvatarView({super.key, required this.url, this.onMessage});
 
@@ -55,12 +62,35 @@ class AvatarViewState extends State<AvatarView> {
   }
 
   /// Make the avatar say a word or chunk. opts are passed to avatar.play():
-  /// boost {gains, start, end}, holdAt (s), holdMs, tts {voice, rate}.
+  /// boost {gains, start, end}, holdViseme, holdMs, tts {voice, rate, ipa}.
   Future<void> say(String text, {Map<String, dynamic>? opts}) {
     return controller.runJavaScript(
       'window.say(${jsonEncode(text)}, ${jsonEncode(opts ?? {})});',
     );
   }
+
+  /// Say several things back to back (e.g. a tip, then the sound), each as
+  /// (text, opts) like say().
+  Future<void> sayAll(List<(String, Map<String, dynamic>)> items) {
+    final list = [for (final (text, opts) in items) [text, opts]];
+    return controller.runJavaScript('window.sayAll(${jsonEncode(list)});');
+  }
+
+  /// Synthesize a clip ahead of time so a later say() with the same text and
+  /// tts options starts right away.
+  Future<void> prepare(String text, {Map<String, dynamic>? tts}) {
+    return controller.runJavaScript(
+      'window.prepare(${jsonEncode(text)}, ${jsonEncode(tts)});',
+    );
+  }
+
+  /// Stage 4: say [text], stopping at each time in [pauseAt] (seconds, one per sound) until
+  /// [resumeStep]. Sends {"event":"paused","index":i} at each stop.
+  Future<void> sayStepwise(String text, List<double> pauseAt) => controller.runJavaScript(
+        'window.sayStepwise(${jsonEncode(text)}, ${jsonEncode(pauseAt)});',
+      );
+
+  Future<void> resumeStep() => controller.runJavaScript('window.resumeStep();');
 
   Future<void> setXray(bool on) =>
       controller.runJavaScript('window.avatar.setXray(${on ? 'true' : 'false'});');

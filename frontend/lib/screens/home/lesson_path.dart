@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../data/models.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/widgets.dart';
 
-/// A winding trail of lesson nodes: done, current, locked.
+/// An ocean map: lessons are shells along a winding current. Done ones are gold, the
+/// current one has the beluga on it, locked ones are grey.
 class LessonPath extends StatelessWidget {
   const LessonPath({super.key, required this.lessons, required this.onOpen});
 
@@ -60,9 +62,9 @@ class _LessonNodeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, icon, size) = switch (lesson.status) {
-      LessonStatus.done => (AppColors.lilyPad, Icons.check_rounded, 60.0),
-      LessonStatus.current => (AppColors.lotus, Icons.play_arrow_rounded, 72.0),
-      LessonStatus.locked => (AppColors.line, Icons.lock_rounded, 60.0),
+      LessonStatus.done => (AppColors.sun, Icons.check_rounded, 64.0),
+      LessonStatus.current => (AppColors.lotusBlush, Icons.play_arrow_rounded, 72.0),
+      LessonStatus.locked => (AppColors.line, Icons.lock_rounded, 64.0),
     };
     return Semantics(
       button: true,
@@ -75,20 +77,16 @@ class _LessonNodeView extends StatelessWidget {
             SizedBox(
               height: 72,
               child: Center(
-                child: Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.surface, width: 4),
-                    boxShadow: AppShadows.soft,
-                  ),
-                  child: Icon(icon,
-                      color: lesson.status == LessonStatus.locked
-                          ? AppColors.inkFaint
-                          : Colors.white,
-                      size: 30),
+                child: Shell(
+                  color: color,
+                  size: size,
+                  child: lesson.status == LessonStatus.current
+                      ? BelugaBuddy(size: size * 0.8, bubbles: false)
+                      : Icon(icon,
+                          color: lesson.status == LessonStatus.locked
+                              ? AppColors.inkFaint
+                              : AppColors.lakeDeep,
+                          size: 26),
                 ),
               ),
             ),
@@ -120,12 +118,24 @@ class _TrailPainter extends CustomPainter {
       final midY = (a.dy + b.dy) / 2;
       path.cubicTo(a.dx, midY, b.dx, midY, b.dx, b.dy);
     }
-    final paint = Paint()
-      ..color = AppColors.lakeMist
+    // the current: a wide band of water with white flow lines along it
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = AppColors.sky.withValues(alpha: 0.25)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 30
+          ..strokeCap = StrokeCap.round);
+    final flow = Paint()
+      ..color = Colors.white.withValues(alpha: 0.9)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 14
+      ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
-    canvas.drawPath(path, paint);
+    for (final metric in path.computeMetrics()) {
+      for (var d = 0.0; d < metric.length; d += 24) {
+        canvas.drawPath(metric.extractPath(d, d + 10), flow);
+      }
+    }
   }
 
   @override

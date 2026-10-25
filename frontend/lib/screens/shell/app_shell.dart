@@ -63,7 +63,7 @@ class AppShell extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  MirrorULogo(size: 24, onLongPress: () => showDebugMenu(context)),
+                  EchoLogo(size: 24, onLongPress: () => showDebugMenu(context)),
                   const SizedBox(height: AppSpace.l),
                   if (learner != null)
                     Row(children: [

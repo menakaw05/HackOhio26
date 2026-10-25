@@ -1,12 +1,22 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'package:frontend/avatar_coach.dart';
 import 'package:frontend/data/app_state.dart';
+import 'package:frontend/data/mock/demo_seed.dart';
+import 'package:frontend/practice_services.dart';
+import 'package:frontend/stage4/follow_along.dart';
+import 'package:frontend/stage4/golden_store.dart';
+import 'package:frontend/stage4/mouth_matcher.dart';
 import 'package:frontend/router.dart';
 import 'package:frontend/theme/app_theme.dart';
 import 'package:frontend/widgets/widgets.dart';
+
+import 'fake_practice_services.dart';
 
 /// Pumps the real app router at [location] as [learner], on an iPhone-sized screen.
 /// [settle] false for screens that show a spinner while loading (it never settles in tests).
@@ -36,6 +46,10 @@ Future<GoRouter> pumpAt(WidgetTester tester, String location,
 }
 
 void main() {
+  // no backend, camera or avatar page in tests
+  setUp(() => createPracticeServices = FakePracticeServices.new);
+  tearDown(() => createPracticeServices = LivePracticeServices.new);
+
   testWidgets('home shows the demo learner, next word, and lesson path', (tester) async {
     await pumpAt(tester, Routes.home);
     expect(tester.takeException(), isNull);
@@ -63,40 +77,92 @@ void main() {
     expect(find.text('Prototype'), findsOneWidget);
   });
 
-  testWidgets('word practice walks hear, watch, try, feedback', (tester) async {
+  testWidgets('word practice: the word first, then the stages after a miss', (tester) async {
+    // stage 4 matches mouth movement against the golden recordings (Menaka's follow-along)
+    final golden = parseGoldenFeatures(File(goldenAsset).readAsStringSync());
+    const steps = [FollowStep('b', 130, 130), FollowStep('u', 270, 230), FollowStep('t', 510, 110)];
+    final services = FakePracticeServices(
+      matcher: MouthMatcher.fromTakes(golden),
+      steps: steps,
+      scores: [
+        scoreOf('boot', [('b', 95), ('u', 40), ('t', 90)], accuracy: 65),
+        scoreOf('boot', [('b', 95), ('u', 92), ('t', 90)], accuracy: 93),
+      ],
+      lipChecks: [
+        const LipCheck(passed: false, score: 0.2, tip: 'Try rounding your lips more.'), // stage 2
+        const LipCheck(passed: true, score: 0.8, tip: 'Great job!'), // stage 3
+      ],
+    );
+    createPracticeServices = () => services;
     await pumpAt(tester, Routes.wordPractice('boot'));
     expect(tester.takeException(), isNull);
-    expect(find.text('boot'), findsOneWidget);
-    expect(find.text('Your avatar coach'), findsOneWidget);
+    expect(find.text('boot', skipOffstage: false), findsOneWidget);
+    expect(find.text('Your avatar coach', skipOffstage: false), findsOneWidget);
+    // stage 1 is just the word: no stages yet
+    expect(find.byType(StepperBar), findsNothing);
+    expect(find.text('Tap the mic and say "boot".', skipOffstage: false), findsOneWidget);
 
+    // the stage bar sits along the bottom, so scroll things up from under it first
     Future<void> tapText(String text) async {
-      await tester.ensureVisible(find.text(text));
+      await tester.ensureVisible(find.text(text, skipOffstage: false));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(text));
+      await tester.tap(find.text(text, skipOffstage: false));
       await tester.pumpAndSettle();
     }
 
-    Future<void> sayIt() async {
-      final mic = find.byType(MicButton);
+    Future<void> tapMic() async {
+      final mic = find.byType(MicButton, skipOffstage: false);
       await tester.ensureVisible(mic);
       await tester.pumpAndSettle();
       await tester.tap(mic);
       await tester.pumpAndSettle();
-      await tester.tap(mic);
-      await tester.pumpAndSettle();
     }
 
-    await tapText('Next: Watch');
-    expect(find.text('Tongue position schematic'), findsOneWidget);
-    expect(find.text('Guidance'), findsOneWidget);
-    await tapText('Next: Try');
-    await sayIt();
-    expect(find.text('Almost!'), findsOneWidget);
-    expect(find.text('Round your lips a little more.'), findsOneWidget);
+    Future<void> sayIt() async {
+      await tapMic();
+      await tapMic();
+    }
 
-    await tapText('Try again');
     await sayIt();
-    expect(find.text('Great!'), findsOneWidget);
+    // missed: the stages show, and it's on to the trouble sound
+    expect(find.byType(StepperBar), findsOneWidget);
+    expect(find.text('Let\'s practice this a bit more! Can you say "oo" in boot?', skipOffstage: false),
+        findsOneWidget);
+    expect(services.lipModel, 'u');
+
+    await sayIt();
+    // stage 2 missed: the coach says the lip model's tip and shows it
+    expect(find.text('Try rounding your lips more.', skipOffstage: false), findsOneWidget);
+    expect(find.text('Watch your coach, then say "oo".', skipOffstage: false), findsOneWidget);
+    await sayIt();
+    expect(find.text("You got it! Let's put it all together now.", skipOffstage: false), findsOneWidget);
+
+    // stage 4: each sound in turn, the child's mouth movement matched against the golden
+    // recordings (here, a golden take of each sound fed in as camera frames)
+    await tapText('Put it together');
+    var t = 0;
+    for (final step in steps) {
+      expect(find.text('Now you: say "${soundPromptFor(step.phoneme).text}" like your coach.', skipOffstage: false),
+          findsOneWidget);
+      final take = golden[step.phoneme]![0];
+      final frames = [...take, for (var i = 0; i < 12; i++) take.last];
+      for (var i = 0; i < frames.length; i++) {
+        services.onFrame!(MouthFrame(t: t + i * 42, features: frames[i], contours: const {}));
+      }
+      t += 5000;
+      await tester.pump(const Duration(milliseconds: 700)); // the green moment, then on
+      await tester.pumpAndSettle();
+    }
+    expect(find.text("Now let's say the whole word!", skipOffstage: false), findsOneWidget);
+
+    // stage 5: the whole word again, with the first score beside it
+    await tapText('Say the whole word');
+    await sayIt();
+    expect(find.text('Great!', skipOffstage: false), findsOneWidget);
+    expect(find.text('You said "boot"!', skipOffstage: false), findsOneWidget);
+    expect(find.bySemanticsLabel('First try 65, now 93'), findsOneWidget);
+    final state = Provider.of<AppState>(tester.element(find.byType(Scaffold).first), listen: false);
+    expect(state.hasBuiltUp('boot'), isTrue); // next time: no breaking it down
     expect(tester.takeException(), isNull);
   });
 
@@ -154,6 +220,11 @@ void main() {
   });
 
   testWidgets('diagnostic: 12 words, sound profile, add to practice', (tester) async {
+    // Azure scores every word; /r/ (spelled ɹ by Azure) is weak
+    createPracticeServices = () => FakePracticeServices(scores: [
+          for (final w in diagnosticWords)
+            scoreOf(w, [for (final p in phonemesFor(w)) p == 'r' ? ('ɹ', 40.0) : (p, 92.0)], accuracy: 85),
+        ]);
     final router = await pumpAt(tester, Routes.diagnostic, learner: 'sam');
     expect(find.text('Word 1 of 12'), findsOneWidget);
     for (var i = 0; i < 12; i++) {
@@ -173,6 +244,7 @@ void main() {
     expect(state.queue.isEmpty, isTrue);
     await tester.scrollUntilVisible(find.text('Add to my practice'), 300,
         scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle(); // let the final scroll lay out before tapping
     await tester.tap(find.text('Add to my practice'));
     await tester.pumpAndSettle();
     expect(state.queue.isEmpty, isFalse);
@@ -267,14 +339,14 @@ void main() {
     state.queue.next();
     final shortened = state.queue.length;
 
-    await tester.longPress(find.byType(MirrorULogo));
+    await tester.longPress(find.byType(EchoLogo));
     await tester.pumpAndSettle();
     expect(find.text('Debug menu'), findsOneWidget);
     await tester.tap(find.text('Reset sample data'));
     await tester.pumpAndSettle();
     expect(state.queue.length, shortened + 1);
 
-    await tester.longPress(find.byType(MirrorULogo));
+    await tester.longPress(find.byType(EchoLogo));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Look & Say'), 200,
         scrollable: find.byType(Scrollable).last);

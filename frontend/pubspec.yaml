@@ -82,6 +82,9 @@ flutter:
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter.ttf
+    - family: Fredoka
+      fonts:
+        - asset: assets/fonts/Fredoka.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

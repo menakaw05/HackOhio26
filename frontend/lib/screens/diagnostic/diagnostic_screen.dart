@@ -7,7 +7,10 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/mock/demo_seed.dart';
 import '../../data/mock/mock_diagnostic.dart';
+import '../../data/sound_profile.dart';
+import '../../practice_services.dart';
 import '../../router.dart';
+import '../../speech_models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
@@ -21,8 +24,11 @@ class DiagnosticScreen extends StatefulWidget {
 class _DiagnosticScreenState extends State<DiagnosticScreen> {
   static const _gotItPause = Duration(milliseconds: 900);
 
+  final PracticeServices _services = createPracticeServices();
+  final Map<String, PAResult> _scores = {};
   int _index = 0;
   bool _listening = false;
+  bool _scoring = false;
   bool _gotIt = false;
   Timer? _advance;
 
@@ -31,17 +37,31 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   @override
   void dispose() {
     _advance?.cancel();
+    _services.dispose();
     super.dispose();
   }
 
-  void _toggleMic() {
+  /// Each word is scored by Azure (no feedback to the child, just "Got it!"); the phoneme
+  /// scores build the sound profile at the end.
+  Future<void> _toggleMic() async {
     if (!_listening) {
-      setState(() => _listening = true);
+      final started = await _services.startRecording(context);
+      if (mounted) setState(() => _listening = started);
       return;
     }
-    // MOCK: nothing is scored yet; show "Got it" and move on
     setState(() {
       _listening = false;
+      _scoring = true;
+    });
+    final word = _word;
+    try {
+      _scores[word] = await _services.stopAndScore(word);
+    } catch (e) {
+      debugPrint('diagnostic: could not score "$word": $e');
+    }
+    if (!mounted) return;
+    setState(() {
+      _scoring = false;
       _gotIt = true;
     });
     _advance = Timer(_gotItPause, _next);
@@ -49,7 +69,13 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
 
   void _next() {
     if (_index == diagnosticWords.length - 1) {
-      context.read<AppState>().applyDiagnostic(MockDiagnostic.profile);
+      final profile = profileFromScores(_scores);
+      // nothing could be scored (e.g. no backend): show the sample profile instead
+      if (profile.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("Couldn't check your words, so this is a sample profile.")));
+      }
+      context.read<AppState>().applyDiagnostic(profile.isEmpty ? MockDiagnostic.profile : profile);
       context.pushReplacement(Routes.diagnosticResults);
       return;
     }
@@ -99,7 +125,10 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
           padding: const EdgeInsets.all(AppSpace.xl),
           child: Column(
             children: [
-              const ComingSoon(label: 'Picture of the word', icon: Icons.image_rounded, height: 140),
+              AnimatedSwitcher(
+                duration: AppMotion.medium,
+                child: WordPicture(key: ValueKey(_word), word: _word, size: 170),
+              ),
               const Spacer(),
               AnimatedSwitcher(
                 duration: AppMotion.medium,
@@ -119,14 +148,16 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                         ],
                       )
                     : Text(
-                        _listening ? "Listening… tap when you're done." : 'Tap the mic and say the word.',
-                        key: ValueKey(_listening),
+                        _scoring
+                            ? 'Checking…'
+                            : (_listening ? "Listening… tap when you're done." : 'Tap the mic and say the word.'),
+                        key: ValueKey((_listening, _scoring)),
                         style: AppText.bodyStrong,
                         textAlign: TextAlign.center,
                       ),
               ),
               const Spacer(),
-              MicButton(listening: _listening, onPressed: _gotIt ? null : _toggleMic),
+              MicButton(listening: _listening, onPressed: _gotIt || _scoring ? null : _toggleMic),
               const SizedBox(height: AppSpace.l),
             ],
           ),

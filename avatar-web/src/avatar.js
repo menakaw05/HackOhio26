@@ -168,13 +168,18 @@ export class Avatar {
 
   // Play synthesized audio with its blend shape frames.
   //   boost:  { gains: { jawOpen: 1.4 }, start: 0.20, end: 0.45 }  (seconds)
-  //   holdAt: seconds into the clip to freeze the face (e.g. peak of /p/)
-  //   holdMs: how long to freeze
+  //   holdAt: seconds into the clip whose pose to hold (e.g. lips sealed for /p/)
+  //   holdMs: how long to hold it
+  //   holdBefore: the held sound starts the clip (the /p/ of "pah"). The face
+  //     eases into its pose, holds it silently, and keeps it until the audio
+  //     gets there, so the lips close once and open into the vowel. Otherwise
+  //     (the /p/ of "ahp") the audio pauses on the pose when it gets there,
+  //     which is the silent closure, so the sound isn't cut in two.
   //   pauseAt: stage 4 only. Seconds into the clip to stop and wait at, one per sound;
   //            onPause(index) is called at each, and playback stays paused until resume().
   play(
     { audio, frames, visemes = [], fps = 60, mime = 'audio/mpeg' },
-    { boost = null, holdAt = null, holdMs = 500, pauseAt = null, onPause = null } = {},
+    { boost = null, holdAt = null, holdMs = 500, holdBefore = false, pauseAt = null, onPause = null } = {},
   ) {
     this.stop();
     this.boost = boost;
@@ -182,8 +187,11 @@ export class Avatar {
     // Azure also sends a few extra viseme events at offset 0 after the real
     // ones; keep the timed ones, in order.
     visemes = visemes.filter((v) => v.time > 0).sort((a, b) => a.time - b.time);
+    const before = holdAt != null && holdBefore;
+    const now = performance.now();
     this.anim = {
-      el, frames, visemes, fps, holdAt, holdMs, held: false, holding: false,
+      el, frames, visemes, fps, holdAt, holdMs, holdBefore: before,
+      held: false, holding: false, previewStart: now, previewUntil: before ? now + holdMs : 0,
       pauseAt: pauseAt ? [...pauseAt].sort((x, y) => x - y) : null, nextPause: 0, waiting: false, onPause,
     };
     return new Promise((resolve, reject) => {
@@ -192,7 +200,10 @@ export class Avatar {
         this.relax();
         resolve();
       };
-      el.play().catch(reject); // browsers need a user gesture before the first play
+      // browsers need a user gesture before the first play
+      const start = () => this.anim?.el === el && el.play().catch(reject);
+      if (before) setTimeout(start, holdMs);
+      else start();
     });
   }
 
@@ -236,7 +247,13 @@ export class Avatar {
 
   tick() {
     const a = this.anim;
-    if (a && !a.holding) {
+    const now = performance.now();
+    if (a && now < a.previewUntil) {
+      // Showing the held pose before speaking, eased in over 150 ms.
+      const i = Math.min(a.frames.length - 1, Math.round(a.holdAt * a.fps));
+      const k = Math.min(1, (now - a.previewStart) / 150);
+      if (a.frames[i]) this.applyFrame(a.frames[i].map((v) => v * k), a.holdAt, a.visemes);
+    } else if (a && !a.holding) {
       const t = a.el.currentTime;
       if (a.pauseAt && a.nextPause < a.pauseAt.length && t >= a.pauseAt[a.nextPause]) {
         const index = a.nextPause++;
@@ -245,7 +262,7 @@ export class Avatar {
         a.el.pause();
         a.onPause?.(index);
       }
-      if (a.holdAt != null && !a.held && t >= a.holdAt) {
+      if (a.holdAt != null && !a.holdBefore && !a.held && !a.waiting && t >= a.holdAt) {
         a.held = true;
         a.holding = true;
         a.el.pause();
@@ -254,8 +271,10 @@ export class Avatar {
           if (this.anim === a) a.el.play();
         }, a.holdMs);
       }
-      const i = Math.min(a.frames.length - 1, Math.floor(t * a.fps));
-      if (i >= 0 && a.frames[i]) this.applyFrame(a.frames[i], t, a.visemes);
+      // A held first sound keeps its pose until the audio reaches it.
+      const ft = a.holdBefore && t < a.holdAt ? a.holdAt : t;
+      const i = Math.min(a.frames.length - 1, Math.floor(ft * a.fps));
+      if (i >= 0 && a.frames[i]) this.applyFrame(a.frames[i], ft, a.visemes);
     }
     if (this.root) {
       // Turn to profile in X-ray mode so the tongue overlay lines up.

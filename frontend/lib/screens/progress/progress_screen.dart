@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -107,15 +109,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
           AppCard(child: Column(children: [for (final s in sounds) SoundBar(score: s)])),
         ],
         if (state.mastered.isNotEmpty) ...[
-          const SectionHeader(title: 'Sounds mastered'),
-          Wrap(
-            spacing: AppSpace.m,
-            runSpacing: AppSpace.m,
-            children: [
-              for (final (i, p) in state.mastered.indexed)
-                FadeSlideIn(index: i, child: _MasteredBadge(phoneme: p)),
-            ],
-          ),
+          const SectionHeader(title: 'Your aquarium'),
+          Text('Every sound you master adds a sea friend.', style: AppText.caption),
+          const SizedBox(height: AppSpace.s),
+          _Aquarium(mastered: state.mastered),
         ],
         if (state.activity.isNotEmpty) ...[
           const SectionHeader(title: 'Recent activity'),
@@ -165,35 +162,154 @@ class _TrendRow extends StatelessWidget {
   }
 }
 
-class _MasteredBadge extends StatelessWidget {
-  const _MasteredBadge({required this.phoneme});
+/// A fish tank with one sea creature per mastered sound: fish swimming, every third one a
+/// starfish on the sand.
+class _Aquarium extends StatelessWidget {
+  const _Aquarium({required this.mastered});
 
-  final String phoneme;
+  final List<String> mastered;
+
+  static const _fishColors = [AppColors.lotus, AppColors.sky, AppColors.lilyPad, AppColors.almost];
 
   @override
   Widget build(BuildContext context) {
+    final rows = (mastered.length / 3).ceil();
     return Semantics(
-      label: 'Mastered sound $phoneme',
+      label: 'Aquarium with ${mastered.length} sea friends, for ${mastered.map((p) => '/$p/').join(', ')}',
       excludeSemantics: true,
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppColors.successSoft,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.success, width: 3),
-            ),
-            alignment: Alignment.center,
-            child: Text('/$phoneme/', style: AppText.section.copyWith(color: AppColors.success)),
+      child: Container(
+        height: 120.0 + rows * 70,
+        decoration: BoxDecoration(
+          borderRadius: AppRadius.cardRadius,
+          border: Border.all(color: AppColors.lakeDeep, width: 2.5),
+          boxShadow: AppShadows.soft,
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFBFE9E4), Color(0xFF6CC4C0), Color(0xFF2F86C8)],
           ),
-          const SizedBox(height: AppSpace.xs),
-          const Icon(Icons.star_rounded, color: AppColors.almost, size: 18),
-        ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(builder: (context, box) {
+          final w = box.maxWidth;
+          final h = box.maxHeight;
+          return Stack(
+            children: [
+              // sand and bubbles
+              Positioned.fill(child: CustomPaint(painter: _TankPainter())),
+              for (final (i, p) in mastered.indexed)
+                if (i % 3 == 2)
+                  Positioned(
+                    left: w * (0.12 + (i ~/ 3) * 0.3 % 0.75),
+                    bottom: 8,
+                    child: _Creature(phoneme: p, child: const Starfish(color: AppColors.sun, size: 46)),
+                  )
+                else
+                  Positioned(
+                    left: w * (i.isEven ? 0.08 : 0.52) + (i ~/ 3) * 18,
+                    top: 18 + (i ~/ 3) * 70.0 + (i.isEven ? 0 : 26),
+                    child: _Creature(
+                      phoneme: p,
+                      child: CustomPaint(
+                        size: const Size(70, 40),
+                        painter: _FishPainter(_fishColors[i % _fishColors.length], flip: i.isOdd),
+                      ),
+                    ),
+                  ),
+              if (mastered.isEmpty)
+                Center(
+                  child: Text('Master a sound to add your first fish!',
+                      style: AppText.bodyStrong.copyWith(color: Colors.white)),
+                ),
+              Positioned(right: 6, top: h * 0.42, child: const BelugaBuddy(size: 84, bubbles: true)),
+            ],
+          );
+        }),
       ),
     );
   }
+}
+
+/// A sea creature with its sound on a little tag.
+class _Creature extends StatelessWidget {
+  const _Creature({required this.phoneme, required this.child});
+
+  final String phoneme;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        child,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s),
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: AppRadius.pillRadius),
+          child: Text('/$phoneme/', style: AppText.caption.copyWith(color: AppColors.lakeDeep)),
+        ),
+      ],
+    );
+  }
+}
+
+class _FishPainter extends CustomPainter {
+  _FishPainter(this.color, {this.flip = false});
+
+  final Color color;
+  final bool flip;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    if (flip) {
+      canvas.translate(w, 0);
+      canvas.scale(-1, 1);
+    }
+    final body = Paint()..color = color;
+    canvas.drawPath(
+        Path()
+          ..moveTo(w * 0.3, h * 0.5)
+          ..lineTo(0, h * 0.1)
+          ..lineTo(0, h * 0.9)
+          ..close(),
+        body);
+    canvas.drawOval(Rect.fromLTWH(w * 0.2, 0, w * 0.8, h), body);
+    canvas.drawOval(Rect.fromLTWH(w * 0.45, h * 0.55, w * 0.2, h * 0.25),
+        Paint()..color = Colors.white.withValues(alpha: 0.35));
+    canvas.drawCircle(Offset(w * 0.8, h * 0.4), h * 0.13, Paint()..color = Colors.white);
+    canvas.drawCircle(Offset(w * 0.82, h * 0.4), h * 0.07, Paint()..color = AppColors.ink);
+  }
+
+  @override
+  bool shouldRepaint(_FishPainter old) => old.color != color || old.flip != flip;
+}
+
+class _TankPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sand = Path()..moveTo(0, size.height);
+    for (var x = 0.0; x <= size.width; x += 10) {
+      sand.lineTo(x, size.height - 22 - math.sin(x / 40) * 5);
+    }
+    sand
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(sand, Paint()..color = const Color(0xFFF6E3B4));
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = Colors.white.withValues(alpha: 0.5);
+    final rng = math.Random(3);
+    for (var i = 0; i < 10; i++) {
+      canvas.drawCircle(
+          Offset(rng.nextDouble() * size.width, rng.nextDouble() * size.height * 0.8), 3 + rng.nextDouble() * 6, ring);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TankPainter old) => false;
 }
 
 class _ActivityRow extends StatelessWidget {

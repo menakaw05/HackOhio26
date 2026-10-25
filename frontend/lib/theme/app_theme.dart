@@ -50,6 +50,7 @@ abstract final class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       fontFamily: AppText.body,
+      fontFamilyFallback: const ['Inter'],
       textTheme: textTheme,
       scaffoldBackgroundColor: AppColors.background,
       splashFactory: InkSparkle.splashFactory,

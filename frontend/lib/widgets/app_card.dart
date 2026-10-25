@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'motion.dart';
 
-/// Rounded white card with a soft shadow. Pass [gradient] for hero cards.
+/// Rounded white sticker: dark outline on a hard shadow. Pass [gradient] for hero cards.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -36,6 +36,8 @@ class AppCard extends StatelessWidget {
             color: gradient == null ? color : null,
             gradient: gradient,
             borderRadius: AppRadius.cardRadius,
+            // a sticker: dark outline and a hard shadow
+            border: Border.all(color: AppColors.lakeDeep, width: 2.5),
             boxShadow: AppShadows.soft,
           ),
           child: Material(

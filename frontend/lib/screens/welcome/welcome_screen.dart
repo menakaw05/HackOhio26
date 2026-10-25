@@ -16,23 +16,20 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppGradients.lakeDawn),
+      body: OceanBackdrop(
+        gradient: AppGradients.lakeDawn,
         child: SafeArea(
           child: ListView(
             padding: const EdgeInsets.all(AppSpace.xl),
             children: [
-              const SizedBox(height: AppSpace.xxl),
-              Center(child: MirrorULogo(size: 40, onLongPress: () => showDebugMenu(context))),
               const SizedBox(height: AppSpace.xl),
-              const ComingSoon(
-                label: 'Mascot illustration',
-                icon: Icons.local_florist_rounded,
-                height: 140,
+              Center(
+                child: EchoLogo(size: 40, onLongPress: () => showDebugMenu(context)),
               ),
-              const SizedBox(height: AppSpace.xl),
-              Text("Who's practicing today?",
-                  style: AppText.title, textAlign: TextAlign.center),
+              const SizedBox(height: AppSpace.m),
+              const Center(child: BelugaBuddy(size: 180)),
+              const SizedBox(height: AppSpace.l),
+              Text("Who's practicing today?", style: AppText.title, textAlign: TextAlign.center),
               const SizedBox(height: AppSpace.l),
               for (final (i, learner) in state.learners.indexed) ...[
                 FadeSlideIn(
@@ -59,7 +56,7 @@ class WelcomeScreen extends StatelessWidget {
                     child: Icon(Icons.add_rounded, color: AppColors.lake),
                   ),
                   const SizedBox(width: AppSpace.m),
-                  Text('Add a learner', style: AppText.section),
+                  Flexible(child: Text('Add a learner', style: AppText.section)),
                 ]),
               ),
             ],
@@ -88,7 +85,7 @@ class _LearnerCard extends StatelessWidget {
           Expanded(child: Text(learner.name, style: AppText.title)),
           if (learner.streak > 0)
             TagBadge(
-              label: '🔥 ${learner.streak} days',
+              label: '🌊 ${learner.streak} days',
               color: AppColors.lotusDeep,
               background: AppColors.lotusBlush,
             ),
