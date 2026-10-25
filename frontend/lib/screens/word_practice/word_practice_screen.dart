@@ -401,14 +401,16 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
 
     final header = Row(
       children: [
-        Flexible(
-          child: SourceChip(
-            label: _word.source.label,
-            icon: _word.source.icon,
-            when: relativeDay(_word.addedAt),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SourceChip(
+              label: _word.source.label,
+              icon: _word.source.icon,
+              when: relativeDay(_word.addedAt),
+            ),
           ),
         ),
-        const Spacer(),
         AttemptDots(
           total: _maxAttempts,
           results: [for (final a in _attempts) a.kind],
@@ -536,8 +538,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen> {
     if (camera == null) {
       return Center(
         child: _cameraFailed
-            ? Text('No camera on this device.', style: AppText.caption)
-            : const CircularProgressIndicator(),
+            ? Text('No camera on this device.',
+                style: AppText.caption.copyWith(color: Colors.white70), textAlign: TextAlign.center)
+            : const CircularProgressIndicator(color: Colors.white),
       );
     }
     return Center(
@@ -753,9 +756,12 @@ class _AvatarStage extends StatelessWidget {
   Widget build(BuildContext context) {
     final camera = this.camera;
     return Container(
-      decoration: const BoxDecoration(
+      // a spotlit stage in a white frame
+      decoration: BoxDecoration(
         gradient: AppGradients.stage,
         borderRadius: AppRadius.cardRadius,
+        border: Border.all(color: Colors.white, width: 4),
+        boxShadow: [BoxShadow(color: AppColors.edgeOf(AppColors.lakeDeep), offset: const Offset(0, 6))],
       ),
       padding: const EdgeInsets.all(AppSpace.m),
       child: camera == null
