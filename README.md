@@ -4,7 +4,9 @@ A speech practice app for kids. When a child misses a sound, an avatar shows how
 
 Won **Most Technical** at [HackOHI/O 2026](https://hack.osu.edu/2026).
 
-<!-- Demo video goes here: drag the file into this spot in GitHub's README editor. -->
+[Watch the demo on YouTube](https://youtu.be/tHJst_wKgak)
+
+<a href="https://youtu.be/tHJst_wKgak"><img src="docs/demo-thumb.png" alt="echo-me demo: the avatar coach and the camera side by side during stage 3" width="280"></a>
 
 ## Why we built it
 
